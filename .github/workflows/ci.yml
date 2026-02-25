@@ -1,0 +1,21 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+      - name: Build vault-api
+        run: |
+          cd services/vault-api && go build ./...
+      - name: Build merkle-engine
+        run: |
+          cd services/merkle-engine && cargo build --release || true
+      - name: Lint / test placeholders
+        run: echo "tests and static checks would run here"

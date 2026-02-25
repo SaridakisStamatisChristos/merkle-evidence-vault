@@ -1,0 +1,10 @@
+[package]
+name = "merkle-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sha2 = "0.10"
+ed25519-dalek = { version = "1.0.1", features = ["std"] }
+anyhow = "1.0"
+hex = "0.4"

@@ -1,0 +1,7 @@
+{
+  "title": "Vault Overview",
+  "panels": [
+    { "type": "stat", "title": "Tree Size", "targets": [] },
+    { "type": "stat", "title": "Latest STH Age", "targets": [] }
+  ]
+}

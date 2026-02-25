@@ -1,0 +1,18 @@
+groups:
+  - name: vault.rules
+    rules:
+      - alert: MerkleEngineDown
+        expr: up{job="merkle-engine"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "merkle-engine is down"
+
+      - alert: CheckpointStale
+        expr: time() - max_over_time(signed_tree_heads_published_at[1h]) > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "checkpoint age exceeds threshold"

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-api
+  namespace: vault
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: merkle-engine
+  namespace: vault
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: checkpoint-svc
+  namespace: vault

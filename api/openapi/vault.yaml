@@ -1,0 +1,46 @@
+openapi: 3.1.0
+info:
+  title: Vault API
+  version: 1.0.0
+paths:
+  /ingest:
+    post:
+      summary: Ingest evidence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                evidence:
+                  type: string
+      responses:
+        '200':
+          description: Successful ingestion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+  /query:
+    get:
+      summary: Query evidence
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful query
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  evidence:
+                    type: string

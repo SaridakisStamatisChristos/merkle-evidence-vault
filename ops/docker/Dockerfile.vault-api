@@ -1,0 +1,9 @@
+FROM golang:1.20-alpine AS builder
+WORKDIR /src
+COPY services/vault-api .
+RUN apk add --no-cache git
+RUN go build -o /out/vault-api ./cmd/server
+
+FROM gcr.io/distroless/base-debian11
+COPY --from=builder /out/vault-api /usr/local/bin/vault-api
+ENTRYPOINT ["/usr/local/bin/vault-api"]

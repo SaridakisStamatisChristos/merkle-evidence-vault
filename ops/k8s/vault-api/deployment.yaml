@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault-api
+  namespace: vault
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: vault-api
+  template:
+    metadata:
+      labels:
+        app: vault-api
+    spec:
+      serviceAccountName: vault-api
+      containers:
+        - name: vault-api
+          image: vault-api:latest
+          ports:
+            - containerPort: 8443
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
