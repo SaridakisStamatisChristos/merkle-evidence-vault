@@ -72,6 +72,22 @@ jobs:
           # Start the Go-based JWKS stub; it prints tokens and serves /jwks.json
           nohup go run scripts/ci_jwks.go > scripts/ci_jwks_env.txt 2>&1 &
 
+      - name: Start API server
+        run: |
+          echo "Starting vault-api server in background (HTTP_ADDR=:8080)"
+          # run the server from its module; bind to :8080 so tests can reach it on localhost:8080
+          pushd services/vault-api/cmd/server
+          nohup env HTTP_ADDR=":8080" go run . > /tmp/vault-api.log 2>&1 &
+          popd
+          # Wait for the server to respond on the health endpoint
+          for i in {1..30}; do
+            if curl -sSf http://localhost:8080/healthz >/dev/null 2>&1; then
+              echo "vault-api ready"
+              break
+            fi
+            sleep 1
+          done
+
       - name: Load CI envs and run integration helper (no test-jwt)
         shell: bash
         env:
