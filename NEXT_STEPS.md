@@ -6,17 +6,20 @@ its current development/test-shim state toward a production-ready system.
 Recent progress
 ---------------
 - Added `scripts/run-integration.ps1` — a PowerShell helper that sets E2E environment variables, brings up `docker-compose`, runs integration and e2e tests, and tears down the stack.
-- Documented PowerShell usage and example env exports in `README.md`.
-- Created branch `feature/add-run-integration-script` and opened PR: https://github.com/SaridakisStamatisChristos/merkle-evidence-vault/pull/1
-- Integration and e2e tests pass locally when run via the helper script (in-memory store).
+- Implemented JWKS-capable JWT middleware in `services/vault-api/middleware` and removed implicit test-mode fallbacks; unit tests updated to enable explicit test-mode during local testing.
+- Added a `Store` abstraction and a Postgres-backed implementation (`pgStore`) under `services/vault-api/store`; exercised `pgStore` end-to-end by setting `DATABASE_URL` in compose and via the helper script.
+- Updated `ops/docker/docker-compose.yml` to include `DATABASE_URL` and enable local test-mode flags for reproducible developer runs.
+- Added `.github/workflows/ci.yml` to run formatting/linting and the integration+e2e helper in CI.
+- Integration and e2e tests pass locally via the helper script with the Postgres-backed store exercised; smoke/integration/e2e golden-path validated.
+- Performed branch & PR cleanup and consolidated recovered work onto `main`; pushed the recovered WIP changes and verified tests on `main`.
 
 Immediate next steps
 --------------------
-- Validate `pgStore` integration: run the full integration + e2e flows with `DATABASE_URL` set so the Postgres-backed store is exercised (verify schema, migrations, and correctness). (Owner: backend/data)
-- Harden CI: add a GitHub Actions workflow to run `gofmt`/`go vet` and execute the integration+e2e test flows (use service containers / docker-compose or a job that builds and runs the compose stack). (Owner: infra/CI)
 - Add PR metadata: reviewers, labels, and a brief PR description with the test run summary and known caveats for Windows/PowerShell. (Owner: repo maintainer)
-- Add an automated check that the e2e tests use the same HTTP scheme as the server (avoid https/http mismatch in test runners). (Owner: backend/test)
-- Validate `pgStore` under load and run migration integration tests against the `persistence/migrations` scripts. (Owner: backend/data)
+- Remove `ENABLE_TEST_JWT` from CI and replace with a JWKS stub or provide CI-signed JWKS tokens so CI enforces real JWT verification. (Owner: infra/security)
+- Add migration integration tests that assert the DB schema, run `persistence/migrations`, and validate persisted evidence/audit records after upgrade paths. (Owner: backend/data)
+- Harden CI job matrix and stability: add healthchecks, timeouts, and resource limits for service containers used by integration/e2e runs. (Owner: infra/CI)
+- Add a lightweight JWKS test harness (local stub server) for developer runs so tests can exercise real JWKS validation without external dependencies. (Owner: backend/test)
 
 
 Context
