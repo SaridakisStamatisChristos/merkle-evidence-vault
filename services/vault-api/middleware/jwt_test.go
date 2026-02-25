@@ -1,12 +1,16 @@
 package middleware
 
 import (
+	"os"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
 func TestJWT_TestModeRoles(t *testing.T) {
+	// enable explicit test-mode for this unit test
+	os.Setenv("ENABLE_TEST_JWT", "true")
+	defer os.Unsetenv("ENABLE_TEST_JWT")
 	// handler that inspects roles from context
 	h := JWT(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		roles := RolesFromContext(r.Context())
