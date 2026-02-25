@@ -60,6 +60,22 @@ $e2eExit = $LASTEXITCODE
 
 Write-Host "Tearing down docker-compose..."
 docker-compose -f $composeFile down
+Write-Host "Tearing down docker-compose..."
+docker-compose -f $composeFile down
+
+# Cleanup any CI JWKS artifacts that may have been generated
+if (Test-Path "scripts/ci_jwks_env.txt") {
+    Remove-Item "scripts/ci_jwks_env.txt" -ErrorAction SilentlyContinue
+    Write-Host "Removed scripts/ci_jwks_env.txt"
+}
+if (Test-Path "scripts/jwks.json") {
+    Remove-Item "scripts/jwks.json" -ErrorAction SilentlyContinue
+    Write-Host "Removed scripts/jwks.json"
+}
+if (Test-Path "scripts/jwks_key.pem") {
+    Remove-Item "scripts/jwks_key.pem" -ErrorAction SilentlyContinue
+    Write-Host "Removed scripts/jwks_key.pem"
+}
 
 if ($intExit -ne 0 -or $e2eExit -ne 0) {
     Write-Host "One or more test suites failed (integration:$intExit, e2e:$e2eExit)" -ForegroundColor Red
