@@ -88,18 +88,19 @@ jobs:
       - name: Start API server
         run: |
           echo "Starting vault-api server in background (HTTP_ADDR=:8080)"
-          # run the server from its module; bind to :8080 so tests can reach it on localhost:8080
           pushd services/vault-api/cmd/server
           nohup env HTTP_ADDR=":8080" go run . > /tmp/vault-api.log 2>&1 &
           popd
-          # Wait for the server to respond on the health endpoint
-          for i in {1..30}; do
+          for i in {1..60}; do
             if curl -sSf http://localhost:8080/healthz >/dev/null 2>&1; then
               echo "vault-api ready"
               break
             fi
-            sleep 1
+            sleep 2
           done
+          if ! curl -sSf http://localhost:8080/healthz >/dev/null 2>&1; then
+            echo "vault-api failed to start"; exit 1
+          fi
 
       - name: Dump vault-api startup log
         run: |
@@ -113,22 +114,19 @@ jobs:
       - name: Load CI envs and run integration helper (no test-jwt)
         shell: bash
         env:
-          # default values if script didn't output
           E2E_INGESTER_TOKEN: ingester-token-example
           E2E_AUDITOR_TOKEN: auditor-token-example
         run: |
-          # Wait for JWKS stub to be ready
           for i in {1..15}; do
             if curl -sSf http://localhost:8000/jwks.json >/dev/null 2>&1; then break; fi
             sleep 1
           done
-          # Source the generated env file lines
           set -o allexport
-          grep -v '^\s*$' scripts/ci_jwks_env.txt | sed 's/\r$//' | while IFS= read -r line; do export "$line"; done
+          grep -v '^
+' scripts/ci_jwks_env.txt | sed 's/\r$//' | while IFS= read -r line; do export "$line"; done
           set +o allexport
           export JWKS_URL=http://localhost:8000/jwks.json
-          # run the PowerShell helper with test-JWT disabled so CI exercises JWKS
-          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false -ApiUrl "http://localhost:8080" -IngesterToken "$E2E_INGESTER_TOKEN" -AuditorToken "$E2E_AUDITOR_TOKEN"
 
       - name: CI cleanup JWKS artifacts
         run: |
