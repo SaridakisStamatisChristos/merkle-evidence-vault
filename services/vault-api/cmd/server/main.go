@@ -32,9 +32,9 @@ func main() {
 		r.Get("/evidence/{id}", h.GetEvidence)
 		r.Get("/evidence/{id}/proof", h.GetProof)
 
-		// audit and checkpoint endpoints
-		r.With(middleware.Auth).Get("/audit", h.GetAudit)
-		r.With(middleware.Auth).Get("/checkpoints/latest", h.GetCheckpointsLatest)
+		// audit and checkpoint endpoints (JWT middleware)
+		r.With(middleware.JWT).Get("/audit", h.GetAudit)
+		r.With(middleware.JWT).Get("/checkpoints/latest", h.GetCheckpointsLatest)
 	})
 
 	addr := os.Getenv("HTTP_ADDR")
