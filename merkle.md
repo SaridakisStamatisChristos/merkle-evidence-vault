@@ -60,7 +60,7 @@ BOUNDARIES:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📁 REPO TREE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-merkle-evidence-vault/
+SaridakisStamatisChristos/
 ├── api/
 │   ├── openapi/vault.yaml
 │   └── proto/vault.proto
@@ -2037,7 +2037,7 @@ INSERT INTO bundle_exports (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 
 services/vault-api/go.mod
-gomodule github.com/merkle-evidence-vault/vault-api
+gomodule github.com/SaridakisStamatisChristos/vault-api
 
 go 1.22
 
@@ -2218,9 +2218,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/merkle-evidence-vault/vault-api/config"
-	"github.com/merkle-evidence-vault/vault-api/handler"
-	"github.com/merkle-evidence-vault/vault-api/middleware"
+  "github.com/SaridakisStamatisChristos/vault-api/config"
+  "github.com/SaridakisStamatisChristos/vault-api/handler"
+  "github.com/SaridakisStamatisChristos/vault-api/middleware"
 )
 
 func main() {
@@ -2375,7 +2375,7 @@ import (
 
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	"github.com/merkle-evidence-vault/vault-api/config"
+  "github.com/SaridakisStamatisChristos/vault-api/config"
 )
 
 type contextKey string
@@ -2654,9 +2654,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 
-	"github.com/merkle-evidence-vault/vault-api/config"
-	"github.com/merkle-evidence-vault/vault-api/middleware"
-	"github.com/merkle-evidence-vault/vault-api/domain/evidence"
+  "github.com/SaridakisStamatisChristos/vault-api/config"
+  "github.com/SaridakisStamatisChristos/vault-api/middleware"
+  "github.com/SaridakisStamatisChristos/vault-api/domain/evidence"
 )
 
 const maxIngestBodyBytes = 4*1024*1024 + 512 // 4 MiB + header slack
@@ -2812,7 +2812,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 
-	"github.com/merkle-evidence-vault/vault-api/config"
+  "github.com/SaridakisStamatisChristos/vault-api/config"
 )
 
 type QueryHandler struct {
@@ -3057,8 +3057,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/merkle-evidence-vault/vault-api/config"
-	"github.com/merkle-evidence-vault/vault-api/middleware"
+  "github.com/SaridakisStamatisChristos/vault-api/config"
+  "github.com/SaridakisStamatisChristos/vault-api/middleware"
 )
 
 type ExportHandler struct {
@@ -3235,7 +3235,7 @@ protobufsyntax = "proto3";
 
 package vault.v1;
 
-option go_package = "github.com/merkle-evidence-vault/vault-api/gen/vaultpb";
+option go_package = "github.com/SaridakisStamatisChristos/vault-api/gen/vaultpb";
 
 // ── MerkleEngine — internal RPC between vault-api and Rust engine ──────────
 
@@ -3724,9 +3724,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
-	pb "github.com/merkle-evidence-vault/vault-api/gen/vaultpb"
-	"github.com/merkle-evidence-vault/vault-api/config"
-	"github.com/merkle-evidence-vault/vault-api/domain/merkle"
+  pb "github.com/SaridakisStamatisChristos/vault-api/gen/vaultpb"
+  "github.com/SaridakisStamatisChristos/vault-api/config"
+  "github.com/SaridakisStamatisChristos/vault-api/domain/merkle"
 )
 
 // Client wraps the generated gRPC stub and implements domain/merkle.Engine.
@@ -3849,9 +3849,9 @@ import (
 	kafka "github.com/segmentio/kafka-go"
 	"github.com/rs/zerolog/log"
 
-	"github.com/merkle-evidence-vault/vault-api/config"
-	"github.com/merkle-evidence-vault/vault-api/domain/merkle"
-	pb "github.com/merkle-evidence-vault/vault-api/gen/vaultpb"
+  "github.com/SaridakisStamatisChristos/vault-api/config"
+  "github.com/SaridakisStamatisChristos/vault-api/domain/merkle"
+  pb "github.com/SaridakisStamatisChristos/vault-api/gen/vaultpb"
 )
 
 // IngestEvent mirrors the proto definition for JSON transport.
@@ -4031,8 +4031,8 @@ import (
 	"time"
 
 	kafka "github.com/segmentio/kafka-go"
-	"github.com/merkle-evidence-vault/vault-api/config"
-	"github.com/merkle-evidence-vault/vault-api/domain/evidence"
+  "github.com/SaridakisStamatisChristos/vault-api/config"
+  "github.com/SaridakisStamatisChristos/vault-api/domain/evidence"
 )
 
 // Publisher wraps a Kafka writer for the ingest topic.
@@ -4094,7 +4094,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/merkle-evidence-vault/vault-api/gen/vaultpb"
+  pb "github.com/SaridakisStamatisChristos/vault-api/gen/vaultpb"
 )
 
 func main() {
@@ -4227,7 +4227,7 @@ import (
 	"os"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/merkle-evidence-vault/vault-api/domain/bundle"
+  "github.com/SaridakisStamatisChristos/vault-api/domain/bundle"
 )
 
 func main() {
@@ -4581,7 +4581,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/merkle-evidence-vault/vault-api/services/verifier-cli/verifier"
+  "github.com/SaridakisStamatisChristos/verifier-cli/verifier"
 )
 
 func TestVerifySTH_ValidSignature(t *testing.T) {
@@ -5013,7 +5013,7 @@ kind: Namespace
 metadata:
   name: vault
   labels:
-    app.kubernetes.io/part-of: merkle-evidence-vault
+    app.kubernetes.io/part-of: SaridakisStamatisChristos
     # Pod Security Standards — restricted profile
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/audit:   restricted
@@ -5110,7 +5110,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: vault-api
-          image: ghcr.io/merkle-evidence-vault/vault-api:0.1.0
+          image: ghcr.io/SaridakisStamatisChristos/vault-api:0.1.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: https
@@ -5283,7 +5283,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: merkle-engine
-          image: ghcr.io/merkle-evidence-vault/merkle-engine:0.1.0
+          image: ghcr.io/SaridakisStamatisChristos/merkle-engine:0.1.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: grpc
@@ -5375,7 +5375,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: checkpoint-svc
-          image: ghcr.io/merkle-evidence-vault/checkpoint-svc:0.1.0
+          image: ghcr.io/SaridakisStamatisChristos/checkpoint-svc:0.1.0
           imagePullPolicy: IfNotPresent
           env:
             - name: DATABASE_URL
@@ -5938,7 +5938,7 @@ jobs:
           context:    .
           file:       ops/docker/Dockerfile.vault-api
           push:       false
-          tags:       ghcr.io/merkle-evidence-vault/vault-api:${{ github.sha }}
+          tags:       ghcr.io/SaridakisStamatisChristos/vault-api:${{ github.sha }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
@@ -5948,7 +5948,7 @@ jobs:
           context: .
           file:    ops/docker/Dockerfile.merkle-engine
           push:    false
-          tags:    ghcr.io/merkle-evidence-vault/merkle-engine:${{ github.sha }}
+          tags:    ghcr.io/SaridakisStamatisChristos/merkle-engine:${{ github.sha }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
@@ -5976,8 +5976,8 @@ jobs:
           file:    ops/docker/Dockerfile.vault-api
           push:    true
           tags: |
-            ghcr.io/merkle-evidence-vault/vault-api:latest
-            ghcr.io/merkle-evidence-vault/vault-api:${{ github.sha }}
+            ghcr.io/SaridakisStamatisChristos/vault-api:latest
+            ghcr.io/SaridakisStamatisChristos/vault-api:${{ github.sha }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
@@ -5988,8 +5988,8 @@ jobs:
           file:    ops/docker/Dockerfile.merkle-engine
           push:    true
           tags: |
-            ghcr.io/merkle-evidence-vault/merkle-engine:latest
-            ghcr.io/merkle-evidence-vault/merkle-engine:${{ github.sha }}
+            ghcr.io/SaridakisStamatisChristos/merkle-engine:latest
+            ghcr.io/SaridakisStamatisChristos/merkle-engine:${{ github.sha }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
@@ -8640,7 +8640,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/merkle-evidence-vault/vault-api/domain/bundle"
+  "github.com/SaridakisStamatisChristos/vault-api/domain/bundle"
 )
 
 func TestBundleManifest_RoundTrip(t *testing.T) {

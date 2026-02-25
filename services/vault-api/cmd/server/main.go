@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
+
+	"github.com/SaridakisStamatisChristos/vault-api/handler"
 )
 
 func main() {
@@ -19,6 +21,15 @@ func main() {
 	r.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		w.Write([]byte(`{"status":"ready"}`))
+	})
+
+	// API routes (minimal in-memory implementation for tests)
+	h := handler.NewIngestHandler()
+	handler.StartCommitter(1 * time.Second)
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Post("/evidence", h.Ingest)
+		r.Get("/evidence/{id}", h.GetEvidence)
+		r.Get("/evidence/{id}/proof", h.GetProof)
 	})
 
 	addr := os.Getenv("HTTP_ADDR")
