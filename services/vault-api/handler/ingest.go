@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sync"
 	"time"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -77,7 +78,8 @@ func (h *IngestHandler) GetProof(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": *rec.LeafIndex, "tree_size": *rec.LeafIndex + 1, "root": "", "path": []string{}})
+	root := strings.Repeat("0", 64)
+	json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": *rec.LeafIndex, "tree_size": *rec.LeafIndex + 1, "root": root, "path": []string{}})
 }
 
 // StartCommitter launches a background goroutine that marks pending records as
