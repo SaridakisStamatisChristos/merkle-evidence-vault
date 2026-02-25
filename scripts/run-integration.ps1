@@ -12,6 +12,8 @@ if (-not $env:E2E_AUDITOR_TOKEN)  { $env:E2E_AUDITOR_TOKEN  = $AuditorToken }
 Write-Host "E2E_API_URL=$env:E2E_API_URL"
 Write-Host "E2E_INGESTER_TOKEN=$($env:E2E_INGESTER_TOKEN)"
 Write-Host "E2E_AUDITOR_TOKEN=$($env:E2E_AUDITOR_TOKEN)"
+Write-Host "Enabling test JWT mode for local runs"
+$env:ENABLE_TEST_JWT = 'true'
 
 $composeFile = "ops/docker/docker-compose.yml"
 if (-not (Test-Path $composeFile)) {

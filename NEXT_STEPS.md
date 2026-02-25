@@ -3,6 +3,22 @@
 This document lists discrete, prioritized tasks to move the project from
 its current development/test-shim state toward a production-ready system.
 
+Recent progress
+---------------
+- Added `scripts/run-integration.ps1` — a PowerShell helper that sets E2E environment variables, brings up `docker-compose`, runs integration and e2e tests, and tears down the stack.
+- Documented PowerShell usage and example env exports in `README.md`.
+- Created branch `feature/add-run-integration-script` and opened PR: https://github.com/SaridakisStamatisChristos/merkle-evidence-vault/pull/1
+- Integration and e2e tests pass locally when run via the helper script (in-memory store).
+
+Immediate next steps
+--------------------
+- Validate `pgStore` integration: run the full integration + e2e flows with `DATABASE_URL` set so the Postgres-backed store is exercised (verify schema, migrations, and correctness). (Owner: backend/data)
+- Harden CI: add a GitHub Actions workflow to run `gofmt`/`go vet` and execute the integration+e2e test flows (use service containers / docker-compose or a job that builds and runs the compose stack). (Owner: infra/CI)
+- Add PR metadata: reviewers, labels, and a brief PR description with the test run summary and known caveats for Windows/PowerShell. (Owner: repo maintainer)
+- Add an automated check that the e2e tests use the same HTTP scheme as the server (avoid https/http mismatch in test runners). (Owner: backend/test)
+- Validate `pgStore` under load and run migration integration tests against the `persistence/migrations` scripts. (Owner: backend/data)
+
+
 Context
 -------
 - Current: property, integration and e2e tests pass locally. `vault-api` has
