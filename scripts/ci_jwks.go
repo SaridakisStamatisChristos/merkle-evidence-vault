@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -63,12 +64,6 @@ func main() {
 	ingester := makeToken("ci-ingester", []string{"ingester"})
 	auditor := makeToken("ci-auditor", []string{"auditor"})
 
-	// write env file for CI consumption
-	envFile := []byte(fmt.Sprintf("E2E_INGESTER_TOKEN=%s\nE2E_AUDITOR_TOKEN=%s\nJWKS_URL=http://localhost:8000/jwks.json\n", ingester, auditor))
-	if err := os.WriteFile("scripts/ci_jwks_env.txt", envFile, 0o600); err != nil {
-		log.Printf("warning: failed to write env file: %v", err)
-	}
-
 	jwksBytes, _ := json.Marshal(jwks)
 
 	// HTTP handlers
@@ -82,13 +77,34 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
+	// determine port to listen on
+	port := os.Getenv("CI_JWKS_PORT")
+	if port == "" {
+		port = "0" // let OS choose an available port
+	}
+
+	ln, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		log.Fatalf("failed to listen on port %s: %v", port, err)
+	}
+	_, actualPort, err := net.SplitHostPort(ln.Addr().String())
+	if err != nil {
+		log.Fatalf("failed to parse listener address: %v", err)
+	}
+
+	// write env file for CI consumption with correct port
+	envFile := []byte(fmt.Sprintf(
+		"E2E_INGESTER_TOKEN=%s\nE2E_AUDITOR_TOKEN=%s\nJWKS_URL=http://localhost:%s/jwks.json\n",
+		ingester, auditor, actualPort))
+	if err := os.WriteFile("scripts/ci_jwks_env.txt", envFile, 0o600); err != nil {
+		log.Printf("warning: failed to write env file: %v", err)
+	}
+
 	// print tokens to stdout so CI step can capture
 	fmt.Printf("E2E_INGESTER_TOKEN=%s\n", ingester)
 	fmt.Printf("E2E_AUDITOR_TOKEN=%s\n", auditor)
-	fmt.Printf("JWKS_URL=http://localhost:8000/jwks.json\n")
+	fmt.Printf("JWKS_URL=http://localhost:%s/jwks.json\n", actualPort)
 
-	log.Printf("serving jwks on :8000/jwks.json")
-	log.Fatal(http.ListenAndServe(":8000", nil))
+	log.Printf("serving jwks on :%s/jwks.json", actualPort)
+	log.Fatal(http.Serve(ln, nil))
 }
-
-// (no helper needed; using os.WriteFile inline)
