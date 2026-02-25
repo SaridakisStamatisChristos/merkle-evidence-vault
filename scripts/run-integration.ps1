@@ -1,7 +1,8 @@
 Param(
     [string]$ApiUrl = 'http://localhost:8080',
     [string]$IngesterToken = 'ingester-token-example',
-    [string]$AuditorToken = 'auditor-token-example'
+    [string]$AuditorToken = 'auditor-token-example',
+    [bool]$EnableTestJwt = $true
 )
 
 Write-Host "Setting E2E environment variables..."
@@ -12,8 +13,13 @@ if (-not $env:E2E_AUDITOR_TOKEN)  { $env:E2E_AUDITOR_TOKEN  = $AuditorToken }
 Write-Host "E2E_API_URL=$env:E2E_API_URL"
 Write-Host "E2E_INGESTER_TOKEN=$($env:E2E_INGESTER_TOKEN)"
 Write-Host "E2E_AUDITOR_TOKEN=$($env:E2E_AUDITOR_TOKEN)"
-Write-Host "Enabling test JWT mode for local runs"
-$env:ENABLE_TEST_JWT = 'true'
+if ($EnableTestJwt) {
+    Write-Host "Enabling test JWT mode for local runs"
+    $env:ENABLE_TEST_JWT = 'true'
+} else {
+    Write-Host "Test JWT mode disabled for this run"
+    if ($env:ENABLE_TEST_JWT) { Remove-Item Env:\ENABLE_TEST_JWT }
+}
 
 $composeFile = "ops/docker/docker-compose.yml"
 if (-not (Test-Path $composeFile)) {
