@@ -16,3 +16,20 @@ make confidence      # Confidence gate (must pass)
 ```
 
 See `CONFIDENCE.md` for the confidence assessment and production readiness.
+
+### Running integration & E2E tests (PowerShell)
+
+When running the repository's integration and end-to-end tests locally on Windows/PowerShell you must export the E2E environment variables in the same shell that runs `make` or `go test`. The test harness expects an API URL and two tokens (ingester and auditor). Example (PowerShell):
+
+```powershell
+$env:E2E_API_URL        = 'http://localhost:8080'
+$env:E2E_INGESTER_TOKEN = 'ingester-token-example'   # include 'ingest' or 'ingester' in the string
+$env:E2E_AUDITOR_TOKEN  = 'auditor-token-example'    # include 'auditor' in the string
+cd C:\Users\scsar\Desktop\merkle
+make integration-test
+```
+
+Notes:
+- The server in the Docker compose listens on HTTP at host port `8080` (container port `8443`), so use an `http://` URL for `E2E_API_URL` unless you enable HTTPS in the server.
+- Set the variables directly in PowerShell (use `$env:...`) so `make` / `go test` inherit them — do not wrap everything in a single quoted string passed to a subshell.
+- If you prefer a helper, there's a PowerShell helper script at `scripts/run-integration.ps1` (see repository).

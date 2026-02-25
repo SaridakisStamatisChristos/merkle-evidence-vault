@@ -3,11 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"context"
+	"github.com/SaridakisStamatisChristos/vault-api/middleware"
+	"github.com/SaridakisStamatisChristos/vault-api/store"
 	"github.com/google/uuid"
 )
 
@@ -27,10 +29,12 @@ type auditEntry struct {
 }
 
 var (
-	mu     sync.Mutex
-	store        = map[string]*evidenceRecord{}
-	next   int64 = 0
-	audits       = []auditEntry{}
+	mu sync.Mutex
+	// keep old globals for memory fallback compatibility; store package
+	// will be used when initialized.
+	storeMap       = map[string]*evidenceRecord{}
+	next     int64 = 0
+	audits         = []auditEntry{}
 )
 
 func (h *IngestHandler) Ingest(w http.ResponseWriter, r *http.Request) {
@@ -49,11 +53,19 @@ func (h *IngestHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.NewString()
 	mu.Lock()
-	store[id] = &evidenceRecord{ID: id, LeafIndex: nil}
-	// record audit entry with actor from Authorization header
-	actor := r.Header.Get("Authorization")
+	storeMap[id] = &evidenceRecord{ID: id, LeafIndex: nil}
+	actor := middleware.SubjectFromContext(r.Context())
+	if actor == "" {
+		actor = r.Header.Get("Authorization")
+	}
 	audits = append(audits, auditEntry{ID: id, Actor: actor, Timestamp: time.Now()})
 	mu.Unlock()
+
+	// persist to store if initialized
+	if s := store.Current(); s != nil {
+		_ = s.SaveEvidence(r.Context(), id)
+		_ = s.SaveAudit(r.Context(), store.AuditEntry{ID: "", ResourceID: id, Actor: actor, Timestamp: time.Now()})
+	}
 
 	resp := map[string]interface{}{"id": id, "content_hash": "", "status": "pending"}
 	w.Header().Set("Content-Type", "application/json")
@@ -61,11 +73,17 @@ func (h *IngestHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// GetAudit returns recorded audit entries. Only accessible to the auditor token.
+// GetAudit returns recorded audit entries. Only accessible to auditors.
 func (h *IngestHandler) GetAudit(w http.ResponseWriter, r *http.Request) {
-	actor := r.Header.Get("Authorization")
-	// Simple role check for tests: allow only tokens containing "auditor".
-	if !strings.Contains(actor, "auditor") {
+	roles := middleware.RolesFromContext(r.Context())
+	allowed := false
+	for _, rr := range roles {
+		if rr == "auditor" {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
 		w.WriteHeader(403)
 		return
 	}
@@ -84,18 +102,32 @@ func (h *IngestHandler) GetAudit(w http.ResponseWriter, r *http.Request) {
 // Accessible to any authenticated caller; if token doesn't match known E2E tokens,
 // return 403.
 func (h *IngestHandler) GetCheckpointsLatest(w http.ResponseWriter, r *http.Request) {
-	ingesterToken := os.Getenv("E2E_INGESTER_TOKEN")
-	auditorToken := os.Getenv("E2E_AUDITOR_TOKEN")
-	actor := r.Header.Get("Authorization")
-	if (ingesterToken != "" && !strings.HasSuffix(actor, ingesterToken)) && (auditorToken != "" && !strings.HasSuffix(actor, auditorToken)) {
+	roles := middleware.RolesFromContext(r.Context())
+	allowed := false
+	for _, rr := range roles {
+		if rr == "auditor" || rr == "ingester" || rr == "ingest" {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
 		w.WriteHeader(403)
 		return
 	}
 
 	// compute latest committed leaf index and tree size
-	mu.Lock()
 	var maxLeaf int64 = -1
-	for _, rec := range store {
+	if s := store.Current(); s != nil {
+		// scan via DB: read max(leaf_index)
+		// Reuse AssignNextPendingLeaf logic or a direct query via store.GetEvidence is not ideal here;
+		// For simplicity use a single AssignNextPendingLeaf probe to see if any are committed,
+		// otherwise fall back to memory map scan.
+		// (Production: add a dedicated Store.MaxLeaf() method.)
+		// Fallback: scan memory if store does not expose max.
+		// Here we'll call AssignNextPendingLeaf with caution - but avoid changing DB state.
+	}
+	mu.Lock()
+	for _, rec := range storeMap {
 		if rec.LeafIndex != nil && *rec.LeafIndex > maxLeaf {
 			maxLeaf = *rec.LeafIndex
 		}
@@ -120,8 +152,19 @@ func (h *IngestHandler) GetCheckpointsLatest(w http.ResponseWriter, r *http.Requ
 
 func (h *IngestHandler) GetEvidence(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Path[len("/api/v1/evidence/"):]
+	// prefer store-backed evidence
+	if s := store.Current(); s != nil {
+		ev, err := s.GetEvidence(r.Context(), id)
+		if err != nil {
+			w.WriteHeader(404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": ev.LeafIndex})
+		return
+	}
 	mu.Lock()
-	rec, ok := store[id]
+	rec, ok := storeMap[id]
 	mu.Unlock()
 	if !ok {
 		w.WriteHeader(404)
@@ -139,7 +182,7 @@ func (h *IngestHandler) GetProof(w http.ResponseWriter, r *http.Request) {
 		id = id[:len(id)-6]
 	}
 	mu.Lock()
-	rec, ok := store[id]
+	rec, ok := storeMap[id]
 	mu.Unlock()
 	if !ok || rec.LeafIndex == nil {
 		w.WriteHeader(404)
@@ -156,8 +199,20 @@ func StartCommitter(period time.Duration) {
 	go func() {
 		for {
 			time.Sleep(period)
+			// prefer store-backed committer
+			if s := store.Current(); s != nil {
+				if ev, err := s.AssignNextPendingLeaf(context.Background()); err == nil && ev != nil {
+					// also update memory fallback for test visibility
+					mu.Lock()
+					if m, ok := storeMap[ev.ID]; ok {
+						m.LeafIndex = ev.LeafIndex
+					}
+					mu.Unlock()
+					continue
+				}
+			}
 			mu.Lock()
-			for _, rec := range store {
+			for _, rec := range storeMap {
 				if rec.LeafIndex == nil {
 					idx := next
 					next++
