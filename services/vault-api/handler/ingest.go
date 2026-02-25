@@ -3,9 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 
 	"github.com/google/uuid"
 )
