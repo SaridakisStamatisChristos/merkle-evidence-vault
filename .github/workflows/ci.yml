@@ -25,8 +25,15 @@ jobs:
             echo "Files not gofmt'd:"; cat /tmp/gofmt.out; exit 1
           fi
 
-      - name: Run go vet
-        run: go vet ./...
+      - name: Run go vet (modules)
+        run: |
+          # run vet only for module directories to avoid go.work prefix issues
+          if [ -d services ]; then
+            go vet ./services/...
+          fi
+          if [ -d tests ]; then
+            go vet ./tests/...
+          fi
 
       - name: Run unit tests
         run: go test ./... -count=1 -v
