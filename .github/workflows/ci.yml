@@ -25,15 +25,16 @@ jobs:
             echo "Files not gofmt'd:"; cat /tmp/gofmt.out; exit 1
           fi
 
-      - name: Run go vet (modules)
+      - name: Run go vet per module
         run: |
-          # run vet only for module directories to avoid go.work prefix issues
-          if [ -d services ]; then
-            go vet ./services/...
-          fi
-          if [ -d tests ]; then
-            go vet ./tests/...
-          fi
+          # Find all directories containing a go.mod and run `go vet` inside them.
+          set -e
+          echo "Scanning repository for go.mod files..."
+          find . -name go.mod -not -path "./.git/*" | while read -r mod; do
+            dir=$(dirname "$mod")
+            echo "Running go vet in: $dir"
+            (cd "$dir" && go vet ./...)
+          done
 
       - name: Run unit tests
         run: go test ./... -count=1 -v
