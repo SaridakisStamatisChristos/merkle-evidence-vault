@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/SaridakisStamatisChristos/vault-api/handler"
+	"github.com/SaridakisStamatisChristos/vault-api/middleware"
 )
 
 func main() {
@@ -30,6 +31,10 @@ func main() {
 		r.Post("/evidence", h.Ingest)
 		r.Get("/evidence/{id}", h.GetEvidence)
 		r.Get("/evidence/{id}/proof", h.GetProof)
+
+		// audit and checkpoint endpoints
+		r.With(middleware.Auth).Get("/audit", h.GetAudit)
+		r.With(middleware.Auth).Get("/checkpoints/latest", h.GetCheckpointsLatest)
 	})
 
 	addr := os.Getenv("HTTP_ADDR")
