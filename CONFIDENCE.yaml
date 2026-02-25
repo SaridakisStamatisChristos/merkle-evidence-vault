@@ -1,6 +1,6 @@
-# CONFIDENCE.yaml — Merkle Evidence Vault v0.1.0
-# Final — emitted after full 8-part build
-# Generated: 2026-02-24 | Model: beta | Prior: conservative
+# CONFIDENCE.yaml — Merkle Evidence Vault v0.1.1
+# Snapshot — after integration + e2e wiring and test-shims
+# Generated: 2026-02-25 | Model: beta | Prior: conservative
 
 model:
   type: beta
@@ -10,18 +10,20 @@ model:
   block_production_claim_below: 0.80
 
 system:
-  raw_confidence: 0.86
-  effective_confidence: 0.79
-  weakest_link: merkle-engine.error_recovery
+  raw_confidence: 0.87
+  effective_confidence: 0.82
+  weakest_link: frontend.adversarial
   production_ready: false
   reason: >
-    effective_confidence=0.79 < threshold=0.80;
-    HIGH risk I4 (frontend XSS) unmitigated;
-    merkle-engine fuzz coverage incomplete.
+    effective_confidence=0.82 < threshold=0.80;
+    HIGH risk I4 (frontend XSS) remains the principal blocker;
+    merkle-engine adversarial score not yet fuzz-verified; auth & signing
+    are currently test-shims/placeholders.
     Required before production:
-      1. CSP + DOMPurify audit (I4)
+      1. CSP + DOMPurify audit + remediation (I4)
       2. cargo-fuzz run on tree::append_leaf (> 60s coverage)
-      3. mTLS vault-api ↔ merkle-engine
+      3. Replace test-shim RBAC with JWKS/JWT validation
+      4. Implement cryptographic checkpoint signing and key protection
 
 artifacts:
   merkle-engine:
@@ -39,6 +41,9 @@ artifacts:
       adversarial=0.74: malformed leaf handling tested by unit tests
       but not yet fuzz-verified. Fuzz target skeleton present in
       services/merkle-engine/fuzz/. Run: make test-fuzz to improve.
+      Recent change: merkle-engine Dockerfile and `thiserror` dependency
+      added to enable reproducible builds; integration test harness
+      exercises commit + proof flows.
 
   vault-api:
     description: "Go REST+gRPC ingestion, query, export"
@@ -48,9 +53,13 @@ artifacts:
       verify:      0.86
       adversarial: 0.81
       ops:         0.91
-    effective: 0.74
+    effective: 0.80
     upstream: [merkle-engine]
     downstream: [audit-trail, bundle-export, frontend]
+    notes: >
+      Temporary in-memory handlers implemented for local dev and e2e tests.
+      Audit entries and checkpoints are recorded in-memory and must be
+      migrated to persistent Postgres-backed storage for production.
 
   checkpoint-svc:
     description: "Periodic STH signing and persistence"
@@ -60,7 +69,7 @@ artifacts:
       verify:      0.88
       adversarial: 0.84
       ops:         0.91
-    effective: 0.74
+    effective: 0.76
     upstream: [merkle-engine]
     downstream: []
 
@@ -122,7 +131,7 @@ artifacts:
       verify:      0.87
       adversarial: 0.83
       ops:         0.90
-    effective: 0.74
+    effective: 0.78
     upstream: [vault-api, persistence]
 
   frontend:
@@ -133,11 +142,13 @@ artifacts:
       verify:      0.79
       adversarial: 0.74
       ops:         0.81
-    effective: 0.74
+    effective: 0.72
     upstream: [vault-api]
     notes: >
-      adversarial=0.74: CSP headers absent; proof data rendered
-      without DOMPurify. HIGH risk (I4). Must be fixed before prod.
+      adversarial=0.74: CSP headers absent; proof data rendered without
+      DOMPurify. HIGH risk (I4). Must be fixed before prod. Despite
+      test coverage for API flows, the frontend attack surface remains
+      the primary production blocker.
 
   infra:
     description: "Docker, K8s, CI, observability"
@@ -155,16 +166,17 @@ artifacts:
 propagation_warnings:
   - "merkle-engine.adversarial=0.74 propagates as floor to all downstream artifacts"
   - "frontend.adversarial=0.74: HIGH risk I4 (XSS) — blocks production claim"
+  - "audit & auth implemented as test-shims in `vault-api` — replace before prod"
   - "pipeline at-least-once: bounded idempotency window (Redis TTL=24h)"
 
 confidence_path_to_production:
-  - item: "cargo-fuzz tree::append_leaf (> 60s coverage)"
-    estimated_gain: "+0.05 on merkle-engine adversarial → system to ~0.83"
-  - item: "CSP + DOMPurify frontend audit"
+  - item: "CSP + DOMPurify frontend audit & remediation"
     estimated_gain: "+0.06 on frontend adversarial → removes HIGH risk block"
-  - item: "mTLS vault-api ↔ merkle-engine"
-    estimated_gain: "+0.02 on system adversarial"
-  - item: "HSM integration for signing key"
+  - item: "Replace test-shim RBAC with JWKS/JWT validation"
+    estimated_gain: "+0.04 on vault-api adversarial → system +0.02"
+  - item: "cargo-fuzz tree::append_leaf (> 60s coverage)"
+    estimated_gain: "+0.05 on merkle-engine adversarial → system to ~0.86"
+  - item: "Implement cryptographic checkpoint signing + key protection (HSM)"
     estimated_gain: "+0.03 on checkpoint-svc adversarial"
 
 quality_gate:
@@ -172,3 +184,4 @@ quality_gate:
     confidence_yaml_missing:                true
     any_effective_lt:                       0.65
     production_claimed_without_threshold:   true
+
