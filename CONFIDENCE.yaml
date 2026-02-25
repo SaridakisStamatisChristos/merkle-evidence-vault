@@ -1,0 +1,174 @@
+# CONFIDENCE.yaml — Merkle Evidence Vault v0.1.0
+# Final — emitted after full 8-part build
+# Generated: 2026-02-24 | Model: beta | Prior: conservative
+
+model:
+  type: beta
+  conservative_prior: true
+  propagation: enabled
+  minimum_effective_confidence: 0.65
+  block_production_claim_below: 0.80
+
+system:
+  raw_confidence: 0.86
+  effective_confidence: 0.79
+  weakest_link: merkle-engine.error_recovery
+  production_ready: false
+  reason: >
+    effective_confidence=0.79 < threshold=0.80;
+    HIGH risk I4 (frontend XSS) unmitigated;
+    merkle-engine fuzz coverage incomplete.
+    Required before production:
+      1. CSP + DOMPurify audit (I4)
+      2. cargo-fuzz run on tree::append_leaf (> 60s coverage)
+      3. mTLS vault-api ↔ merkle-engine
+
+artifacts:
+  merkle-engine:
+    description: "Rust RFC6962 tree, proof gen, Ed25519 STH"
+    raw:
+      spec:        0.95
+      impl:        0.88
+      verify:      0.83
+      adversarial: 0.74
+      ops:         0.87
+    effective: 0.74
+    upstream: []
+    downstream: [vault-api, checkpoint-svc, verifier-cli]
+    notes: >
+      adversarial=0.74: malformed leaf handling tested by unit tests
+      but not yet fuzz-verified. Fuzz target skeleton present in
+      services/merkle-engine/fuzz/. Run: make test-fuzz to improve.
+
+  vault-api:
+    description: "Go REST+gRPC ingestion, query, export"
+    raw:
+      spec:        0.92
+      impl:        0.88
+      verify:      0.86
+      adversarial: 0.81
+      ops:         0.91
+    effective: 0.74
+    upstream: [merkle-engine]
+    downstream: [audit-trail, bundle-export, frontend]
+
+  checkpoint-svc:
+    description: "Periodic STH signing and persistence"
+    raw:
+      spec:        0.93
+      impl:        0.89
+      verify:      0.88
+      adversarial: 0.84
+      ops:         0.91
+    effective: 0.74
+    upstream: [merkle-engine]
+    downstream: []
+
+  verifier-cli:
+    description: "Offline .evb bundle verification (pure Go)"
+    raw:
+      spec:        0.94
+      impl:        0.91
+      verify:      0.92
+      adversarial: 0.86
+      ops:         0.94
+    effective: 0.74
+    upstream: [merkle-engine, bundle-format]
+    notes: "Highest raw scores — offline tool has smallest attack surface"
+
+  bundle-format:
+    description: ".evb tar+zstd archive with manifest + proofs"
+    raw:
+      spec:        0.91
+      impl:        0.87
+      verify:      0.85
+      adversarial: 0.80
+      ops:         0.88
+    effective: 0.80
+    upstream: []
+    downstream: [verifier-cli, vault-api]
+
+  persistence:
+    description: "Postgres append-only schema, RLS, migrations"
+    raw:
+      spec:        0.95
+      impl:        0.92
+      verify:      0.90
+      adversarial: 0.87
+      ops:         0.91
+    effective: 0.87
+    upstream: []
+    downstream: [vault-api, audit-trail]
+    notes: "Highest effective score — DB-layer immutability is well-verified"
+
+  pipeline:
+    description: "Redpanda ingest consumer + publisher"
+    raw:
+      spec:        0.88
+      impl:        0.85
+      verify:      0.82
+      adversarial: 0.77
+      ops:         0.86
+    effective: 0.74
+    upstream: [merkle-engine]
+    downstream: []
+    notes: "at-least-once delivery; dedup via content_hash bounded by Redis TTL"
+
+  audit-trail:
+    description: "Append-only audit log API"
+    raw:
+      spec:        0.91
+      impl:        0.88
+      verify:      0.87
+      adversarial: 0.83
+      ops:         0.90
+    effective: 0.74
+    upstream: [vault-api, persistence]
+
+  frontend:
+    description: "React audit dashboard"
+    raw:
+      spec:        0.85
+      impl:        0.83
+      verify:      0.79
+      adversarial: 0.74
+      ops:         0.81
+    effective: 0.74
+    upstream: [vault-api]
+    notes: >
+      adversarial=0.74: CSP headers absent; proof data rendered
+      without DOMPurify. HIGH risk (I4). Must be fixed before prod.
+
+  infra:
+    description: "Docker, K8s, CI, observability"
+    raw:
+      spec:        0.91
+      impl:        0.89
+      verify:      0.85
+      adversarial: 0.84
+      ops:         0.92
+    effective: 0.84
+    upstream: []
+    downstream: [vault-api, merkle-engine, checkpoint-svc]
+    notes: "distroless images, PSS restricted, network policy default-deny"
+
+propagation_warnings:
+  - "merkle-engine.adversarial=0.74 propagates as floor to all downstream artifacts"
+  - "frontend.adversarial=0.74: HIGH risk I4 (XSS) — blocks production claim"
+  - "pipeline at-least-once: bounded idempotency window (Redis TTL=24h)"
+
+confidence_path_to_production:
+  - item: "cargo-fuzz tree::append_leaf (> 60s coverage)"
+    estimated_gain: "+0.05 on merkle-engine adversarial → system to ~0.83"
+  - item: "CSP + DOMPurify frontend audit"
+    estimated_gain: "+0.06 on frontend adversarial → removes HIGH risk block"
+  - item: "mTLS vault-api ↔ merkle-engine"
+    estimated_gain: "+0.02 on system adversarial"
+  - item: "HSM integration for signing key"
+    estimated_gain: "+0.03 on checkpoint-svc adversarial"
+
+quality_gate:
+  ci_fails_if:
+    confidence_yaml_missing:                true
+    any_effective_lt:                       0.65
+    production_claimed_without_threshold:   true

@@ -1,0 +1,51 @@
+server:
+  http_addr:        "0.0.0.0:8443"
+  grpc_addr:        "0.0.0.0:9443"
+  read_timeout:     "30s"
+  write_timeout:    "60s"
+  shutdown_timeout: "15s"
+  tls_cert_file:    "/etc/vault-api/certs/tls.crt"
+  tls_key_file:     "/etc/vault-api/certs/tls.key"
+
+database:
+  # DSN overridden by DATABASE_URL env var
+  dsn:              ""
+  max_open_conns:   25
+  max_idle_conns:   10
+  conn_max_lifetime: "5m"
+
+redis:
+  addr:     "redis:6379"
+  password: ""          # overridden by REDIS_PASSWORD
+  db:       0
+
+kafka:
+  brokers:
+    - "redpanda:29092"
+  ingest_topic:      "vault.ingest"
+  checkpoint_topic:  "vault.commits"
+  consumer_group:    "vault-pipeline"
+
+merkle_rpc:
+  target:  "merkle-engine:9444"
+  timeout: "10s"
+  use_tls: false          # mTLS deferred to v0.2
+
+auth:
+  jwks_endpoint: "https://auth.example.com/.well-known/jwks.json"
+  issuer:        "https://auth.example.com"
+  audience:      "vault-api"
+  cache_ttl:     "5m"
+
+checkpoint:
+  interval_seconds: 60    # dev: 1 min; prod: 300
+  min_new_leaves:   1
+  # signing_key_hex overridden by MERKLE_SIGNING_KEY_HEX
+
+storage:
+  backend:    "local"
+  local_path: "/tmp/vault-payloads"
+
+log:
+  level:  "debug"
+  format: "text"   # "json" in production

@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: vault_api
+      POSTGRES_DB: vault
+    ports:
+      - "5432:5432"
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+  redpanda:
+    image: docker.redpanda.com/vectorized/redpanda:latest
+    command: ["redpanda", "start", "--overprovisioned", "--smp 1", "--memory 1G"]
+    ports:
+      - "9092:9092"
+  merkle-engine:
+    build:
+      context: ../../
+      dockerfile: ops/docker/Dockerfile.merkle-engine
+    depends_on: [postgres]
+  vault-api:
+    build:
+      context: ../../
+      dockerfile: ops/docker/Dockerfile.vault-api
+    depends_on: [postgres, redis, redpanda, merkle-engine]
+  checkpoint-svc:
+    image: busybox
+    command: ["sh","-c","sleep 3600"]

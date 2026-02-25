@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-api-config
+  namespace: vault
+data:
+  config.yaml: |
+    server:
+      http_addr:        "0.0.0.0:8443"
+      grpc_addr:        "0.0.0.0:9443"
+      read_timeout:     "30s"
+      write_timeout:    "60s"
+      shutdown_timeout: "30s"
+      tls_cert_file:    "/etc/vault-api/certs/tls.crt"
+      tls_key_file:     "/etc/vault-api/certs/tls.key"
+
+    database:
+      dsn:              ""
+      max_open_conns:   25
+      max_idle_conns:   10
+      conn_max_lifetime: "5m"
+
+    redis:
+      addr:     "redis.vault.svc.cluster.local:6379"
+      db:       0
+
+    kafka:
+      brokers:
+        - "redpanda.vault.svc.cluster.local:9092"
+      ingest_topic:     "vault.ingest"
+      checkpoint_topic: "vault.commits"
+      consumer_group:   "vault-pipeline"
+
+    merkle_rpc:
+      target:  "merkle-engine.vault.svc.cluster.local:9444"
+      timeout: "10s"
+      use_tls: false
+
+    auth:
+      jwks_endpoint: "https://auth.example.com/.well-known/jwks.json"
+      issuer:        "https://auth.example.com"
+      audience:      "vault-api"
+      cache_ttl:     "5m"
+
+    checkpoint:
+      interval_seconds: 300
+      min_new_leaves:   1
+
+    storage:
+      backend: "s3"
+      bucket:  "vault-evidence-payloads"
+
+    log:
+      level:  "info"
+      format: "json"

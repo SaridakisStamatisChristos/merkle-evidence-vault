@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkpoint-svc
+  namespace: vault
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: checkpoint-svc
+  template:
+    metadata:
+      labels:
+        app: checkpoint-svc
+    spec:
+      serviceAccountName: checkpoint-svc
+      containers:
+        - name: checkpoint-svc
+          image: checkpoint-svc:latest
+          resources:
+            limits:
+              memory: "256Mi"

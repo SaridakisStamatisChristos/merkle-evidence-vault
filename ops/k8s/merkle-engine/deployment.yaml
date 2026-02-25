@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: merkle-engine
+  namespace: vault
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: merkle-engine
+  template:
+    metadata:
+      labels:
+        app: merkle-engine
+    spec:
+      serviceAccountName: merkle-engine
+      containers:
+        - name: merkle-engine
+          image: merkle-engine:latest
+          ports:
+            - containerPort: 9444
+          resources:
+            limits:
+              memory: "1Gi"
+          securityContext:
+            runAsNonRoot: true

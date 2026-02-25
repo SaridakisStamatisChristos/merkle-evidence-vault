@@ -1,0 +1,8 @@
+FROM rust:1.70 as builder
+WORKDIR /src
+COPY services/merkle-engine .
+RUN cargo build --release
+
+FROM gcr.io/distroless/cc
+COPY --from=builder /src/target/release/merkle-engine /usr/local/bin/merkle-engine
+ENTRYPOINT ["/usr/local/bin/merkle-engine"]

@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package vault;
+
+option go_package = "api/proto;vault";
+
+service VaultService {
+  rpc Ingest (IngestRequest) returns (IngestResponse);
+  rpc Query (QueryRequest) returns (QueryResponse);
+}
+
+message IngestRequest {
+  string evidence = 1;
+}
+
+message IngestResponse {
+  string status = 1;
+}
+
+message QueryRequest {
+  string id = 1;
+}
+
+message QueryResponse {
+  string evidence = 1;
+}
