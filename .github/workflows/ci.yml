@@ -13,6 +13,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Ensure a go.sum exists for cache step
+        run: |
+          # If there are no go.sum files in the repository, create an empty placeholder
+          # so the cache action doesn't warn about a missing dependencies file.
+          shopt -s globstar || true
+          found=$(ls -1 **/go.sum 2>/dev/null | wc -l || true)
+          if [ "$found" -eq "0" ]; then
+            echo "No go.sum found in workspace; creating placeholder go.sum"
+            touch go.sum
+          else
+            echo "Found $found go.sum file(s); using those for cache key"
+          fi
+
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
