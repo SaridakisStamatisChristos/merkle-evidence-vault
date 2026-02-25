@@ -33,6 +33,23 @@ docker-compose -f $composeFile up --build -d
 Write-Host "Waiting 15s for services to start..."
 Start-Sleep -Seconds 15
 
+# If JWKS is required (test-mode disabled and JWKS_URL is set), wait for it to become available
+if (-not $EnableTestJwt -and $env:JWKS_URL) {
+    Write-Host "Waiting for JWKS at $env:JWKS_URL"
+    $attempts = 15
+    for ($i = 0; $i -lt $attempts; $i++) {
+        try {
+            $resp = Invoke-WebRequest -Uri $env:JWKS_URL -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            if ($resp.StatusCode -eq 200) {
+                Write-Host "JWKS is available"
+                break
+            }
+        } catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
 Write-Host "Running integration tests..."
 go test ./tests/integration -count=1 -v
 $intExit = $LASTEXITCODE
