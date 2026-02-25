@@ -56,9 +56,6 @@ func (h *IngestHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	storeMap[id] = &evidenceRecord{ID: id, LeafIndex: nil}
 	actor := middleware.SubjectFromContext(r.Context())
-	if actor == "" {
-		actor = r.Header.Get("Authorization")
-	}
 	audits = append(audits, auditEntry{ID: id, Actor: actor, Timestamp: time.Now()})
 	mu.Unlock()
 
@@ -106,7 +103,7 @@ func (h *IngestHandler) GetCheckpointsLatest(w http.ResponseWriter, r *http.Requ
 	roles := middleware.RolesFromContext(r.Context())
 	allowed := false
 	for _, rr := range roles {
-		if rr == "auditor" || rr == "ingester" || rr == "ingest" {
+		if rr == "auditor" || rr == "ingester" {
 			allowed = true
 			break
 		}
