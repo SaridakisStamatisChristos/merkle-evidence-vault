@@ -25,6 +25,7 @@ func JWT(next http.Handler) http.Handler {
 	// build JWKS client lazily
 	var jwks *keyfunc.JWKS
 	jwksURL := os.Getenv("JWKS_URL")
+	enableTest := os.Getenv("ENABLE_TEST_JWT") == "true"
 	if jwksURL != "" {
 		// try to fetch JWKS; on error we leave jwks nil and fail verification later
 		var err error
@@ -77,7 +78,13 @@ func JWT(next http.Handler) http.Handler {
 			return
 		}
 
-		// Test-mode fallback: map token text to roles for local e2e.
+		// If test-mode is not explicitly enabled, reject unauthenticated requests.
+		if !enableTest {
+			w.WriteHeader(401)
+			return
+		}
+
+		// Test-mode mapping (enabled only when ENABLE_TEST_JWT=true)
 		var roles []string
 		lower := strings.ToLower(tokenStr)
 		if strings.Contains(lower, "auditor") {

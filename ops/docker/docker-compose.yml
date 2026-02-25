@@ -39,6 +39,8 @@ services:
       context: ../../
       dockerfile: ops/docker/Dockerfile.vault-api
     depends_on: [postgres, redis, kafka, merkle-engine]
+    environment:
+      - ENABLE_TEST_JWT=true
     ports:
       - "8080:8443"
   checkpoint-svc:
