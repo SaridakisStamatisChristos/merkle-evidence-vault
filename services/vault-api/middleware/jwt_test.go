@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"os"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
