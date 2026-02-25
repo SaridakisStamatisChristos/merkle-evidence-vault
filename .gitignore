@@ -1,0 +1,13 @@
+# Ignore CI JWKS private material and generated tokens
+/scripts/jwks_key.pem
+/scripts/jwks.json
+/scripts/ci_*.token
+/scripts/ci_jwks_env.txt
+
+# Editor and OS files
+*.swp
+*.swo
+*.bak
+*.tmp
+Thumbs.db
+.DS_Store
