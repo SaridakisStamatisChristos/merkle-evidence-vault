@@ -46,8 +46,16 @@ jobs:
             (cd "$dir" && go vet ./...)
           done
 
-      - name: Run unit tests
-        run: go test ./... -count=1 -v
+      - name: Run unit tests per module
+        run: |
+          # Find module roots (go.mod) and run tests inside each module
+          set -e
+          echo "Scanning repository for go.mod files to run tests..."
+          find . -name go.mod -not -path "./.git/*" | while read -r mod; do
+            dir=$(dirname "$mod")
+            echo "Running go test in: $dir"
+            (cd "$dir" && go test ./... -count=1 -v)
+          done
 
   integration-e2e:
     runs-on: ubuntu-latest
