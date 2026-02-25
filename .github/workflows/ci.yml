@@ -88,6 +88,15 @@ jobs:
             sleep 1
           done
 
+      - name: Dump vault-api startup log
+        run: |
+          echo "=== /tmp/vault-api.log ==="
+          if [ -f /tmp/vault-api.log ]; then
+            tail -n +1 /tmp/vault-api.log || true
+          else
+            echo "/tmp/vault-api.log not found"
+          fi
+
       - name: Load CI envs and run integration helper (no test-jwt)
         shell: bash
         env:
