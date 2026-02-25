@@ -65,6 +65,11 @@ jobs:
           export JWKS_URL=http://localhost:8000/jwks.json
           # run the PowerShell helper with test-JWT disabled so CI exercises JWKS
           pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false
+
+      - name: CI cleanup JWKS artifacts
+        run: |
+          echo "Cleaning up CI JWKS artifacts"
+          rm -f scripts/ci_jwks_env.txt || true
 name: CI
 
 on: [push, pull_request]
