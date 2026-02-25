@@ -11,9 +11,22 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
-  redpanda:
-    image: docker.redpanda.com/vectorized/redpanda:latest
-    command: ["redpanda", "start", "--overprovisioned", "--smp 1", "--memory 1G"]
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on: [zookeeper]
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
       - "9092:9092"
   merkle-engine:
@@ -25,7 +38,9 @@ services:
     build:
       context: ../../
       dockerfile: ops/docker/Dockerfile.vault-api
-    depends_on: [postgres, redis, redpanda, merkle-engine]
+    depends_on: [postgres, redis, kafka, merkle-engine]
+    ports:
+      - "8080:8443"
   checkpoint-svc:
     image: busybox
     command: ["sh","-c","sleep 3600"]
