@@ -20,7 +20,7 @@ type evidenceRecord struct {
 
 var (
 	mu    sync.Mutex
-	store = map[string]*evidenceRecord{}
+	store       = map[string]*evidenceRecord{}
 	next  int64 = 0
 )
 
