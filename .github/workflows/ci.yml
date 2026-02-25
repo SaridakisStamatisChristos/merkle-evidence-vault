@@ -117,15 +117,15 @@ jobs:
           E2E_INGESTER_TOKEN: ingester-token-example
           E2E_AUDITOR_TOKEN: auditor-token-example
         run: |
+          # wait for JWKS stub to write its environment file
           for i in {1..15}; do
-            if curl -sSf http://localhost:8000/jwks.json >/dev/null 2>&1; then break; fi
+            if [ -f scripts/ci_jwks_env.txt ]; then break; fi
             sleep 1
           done
           set -o allexport
-          grep -v '^
+          grep -v '^\
 ' scripts/ci_jwks_env.txt | sed 's/\r$//' | while IFS= read -r line; do export "$line"; done
           set +o allexport
-          export JWKS_URL=http://localhost:8000/jwks.json
           pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false -ApiUrl "http://localhost:8080" -IngesterToken "$E2E_INGESTER_TOKEN" -AuditorToken "$E2E_AUDITOR_TOKEN"
 
       - name: CI cleanup JWKS artifacts
