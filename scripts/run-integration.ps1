@@ -22,9 +22,20 @@ $env:E2E_API_URL = $ApiUrl
 if (-not $env:E2E_INGESTER_TOKEN) { $env:E2E_INGESTER_TOKEN = $IngesterToken }
 if (-not $env:E2E_AUDITOR_TOKEN)  { $env:E2E_AUDITOR_TOKEN  = $AuditorToken }
 
+# if JWKS_URL wasn't inherited (bash step might not have passed it), load from file
+if (-not $env:JWKS_URL -and (Test-Path "scripts/ci_jwks_env.txt")) {
+    $content = Get-Content "scripts/ci_jwks_env.txt"
+    foreach ($line in $content) {
+        if ($line -match '^JWKS_URL=(.*)$') {
+            $env:JWKS_URL = $matches[1]
+        }
+    }
+}
+
 Write-Host "E2E_API_URL=$env:E2E_API_URL"
 Write-Host "E2E_INGESTER_TOKEN=$($env:E2E_INGESTER_TOKEN)"
 Write-Host "E2E_AUDITOR_TOKEN=$($env:E2E_AUDITOR_TOKEN)"
+Write-Host "JWKS_URL=$env:JWKS_URL"
 if ($EnableTestJwt) {
     Write-Host "Enabling test JWT mode for local runs"
     $env:ENABLE_TEST_JWT = 'true'
