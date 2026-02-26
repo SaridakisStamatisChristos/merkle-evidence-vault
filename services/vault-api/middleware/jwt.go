@@ -27,11 +27,17 @@ func JWT(next http.Handler) http.Handler {
 	jwksURL := os.Getenv("JWKS_URL")
 	enableTest := os.Getenv("ENABLE_TEST_JWT") == "true"
 	if jwksURL != "" {
-		// try to fetch JWKS; on error we leave jwks nil and fail verification later
-		var err error
-		jwks, err = keyfunc.Get(jwksURL, keyfunc.Options{RefreshInterval: time.Hour})
-		_ = err
-	}
+        // try to fetch JWKS; log errors so we can debug when it fails
+        var err error
+        jwks, err = keyfunc.Get(jwksURL, keyfunc.Options{RefreshInterval: time.Hour})
+        if err != nil {
+            log.Error().Err(err).Str("jwks_url", jwksURL).Msg("failed to load JWKS")
+        }
+        if jwks == nil {
+            log.Warn().Str("jwks_url", jwksURL).Msg("jwks client is nil after fetch")
+        } else {
+            log.Info().Str("jwks_url", jwksURL).Msg("JWKS loaded successfully")
+        }
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
