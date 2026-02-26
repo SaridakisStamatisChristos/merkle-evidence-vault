@@ -36,7 +36,7 @@ Write-Host "E2E_API_URL=$env:E2E_API_URL"
 Write-Host "E2E_INGESTER_TOKEN=$($env:E2E_INGESTER_TOKEN)"
 Write-Host "E2E_AUDITOR_TOKEN=$($env:E2E_AUDITOR_TOKEN)"
 Write-Host "JWKS_URL=$env:JWKS_URL"
-if ($EnableTestJwt) {
+if ($enableBool) {
     Write-Host "Enabling test JWT mode for local runs"
     $env:ENABLE_TEST_JWT = 'true'
 } else {
