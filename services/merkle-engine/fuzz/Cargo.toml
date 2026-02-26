@@ -1,4 +1,21 @@
 [package]
+name = "fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+libfuzzer-sys = "0.4"
+merkle_engine = { path = ".." }
+
+[lib]
+name = "fuzz_targets"
+path = "fuzz_targets/mod.rs"
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = 3
+[package]
 name = "merkle-fuzz"
 version = "0.1.0"
 edition = "2021"
