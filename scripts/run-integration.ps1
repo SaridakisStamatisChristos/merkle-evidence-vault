@@ -83,7 +83,16 @@ if (-not $enableBool -and $env:JWKS_URL) {
 # start vault-api locally (not in a container) so it can see host JWKS stub easily
 Write-Host "Starting vault-api server locally (HTTP_ADDR=:8080)"
 # ensure environment variables for vault-api match what we expect
+# ensure environment variables for vault-api match what we expect
 $env:DATABASE_URL = "postgres://vault_api@localhost:5432/vault?sslmode=disable"
+# Set HTTP_ADDR according to requested ApiUrl. If ApiUrl contains a port, use it, otherwise default to :8080
+if ($ApiUrl -match "://[^:]+:(\d+)") {
+    $port = $matches[1]
+    $env:HTTP_ADDR = ":$port"
+} else {
+    $env:HTTP_ADDR = ":8080"
+}
+Write-Host "Effective HTTP_ADDR=$env:HTTP_ADDR"
 # other envs (ENABLE_TEST_JWT, JWKS_URL) already set above
 pushd services/vault-api/cmd/server
 nohup go run . > /tmp/vault-api.log 2>&1 &
