@@ -88,9 +88,18 @@ func main() {
 		port = "0" // let OS choose an available port
 	}
 
+	// Ensure scripts directory exists so we can write the env file.
+	if err := os.MkdirAll("scripts", 0755); err != nil {
+		log.Printf("warning: failed to ensure scripts dir: %v", err)
+	}
+
 	ln, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		log.Fatalf("failed to listen on port %s: %v", port, err)
+		log.Printf("warning: failed to listen on port %s: %v; trying random port", port, err)
+		ln, err = net.Listen("tcp", ":0")
+		if err != nil {
+			log.Fatalf("failed to listen on fallback port: %v", err)
+		}
 	}
 	_, actualPort, err := net.SplitHostPort(ln.Addr().String())
 	if err != nil {
