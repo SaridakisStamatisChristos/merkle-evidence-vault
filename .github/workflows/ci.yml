@@ -128,9 +128,6 @@ jobs:
 
       - name: Load CI envs and run integration helper (no test-jwt)
         shell: bash
-        env:
-          E2E_INGESTER_TOKEN: ingester-token-example
-          E2E_AUDITOR_TOKEN: auditor-token-example
         run: |
           # wait for JWKS stub to write its environment file
           for i in {1..15}; do
@@ -138,10 +135,12 @@ jobs:
             sleep 1
           done
           set -o allexport
-          # only export well-formed KEY=VALUE lines
+          # load variables into this shell
           grep -E '^[A-Z0-9_]+=.*' scripts/ci_jwks_env.txt | sed 's/\r$//' | while IFS= read -r line; do export "$line"; done
           set +o allexport
-          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false -ApiUrl "http://localhost:8080" -IngesterToken "$E2E_INGESTER_TOKEN" -AuditorToken "$E2E_AUDITOR_TOKEN"
+          # persist to job environment so subsequent steps (including pwsh) get them
+          grep -E '^[A-Z0-9_]+=.*' scripts/ci_jwks_env.txt >> $GITHUB_ENV
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false -ApiUrl "http://localhost:8080"
 
       - name: CI cleanup JWKS artifacts
         run: |
