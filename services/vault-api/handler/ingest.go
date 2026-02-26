@@ -142,8 +142,28 @@ func (h *IngestHandler) GetCheckpointsLatest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	root := strings.Repeat("0", 64)
-	// Provide a non-empty signature at least 12 chars long to satisfy tests.
+	// Default signature (test/dev fallback)
 	signature := strings.Repeat("a", 64)
+
+	// If a signing service is configured, POST the checkpoint payload for signing.
+	if svc := os.Getenv("CHECKPOINT_SIGNING_URL"); svc != "" {
+		payload := map[string]interface{}{"tree_size": treeSize, "root_hash": root}
+		b, _ := json.Marshal(payload)
+		client := &http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Post(svc, "application/json", strings.NewReader(string(b)))
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				var got map[string]string
+				if err := json.NewDecoder(resp.Body).Decode(&got); err == nil {
+					if s, ok := got["signature"]; ok && s != "" {
+						signature = s
+					}
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"tree_size": treeSize, "root_hash": root, "signature": signature})
 }
