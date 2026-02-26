@@ -35,6 +35,7 @@ jobs:
           RUSTDOCFLAGS: "-Z sanitizer=address"
           ASAN_OPTIONS: "verbosity=1:detect_leaks=1"
         run: |
-          cd services/merkle-engine/fuzz
+          # run from the crate root so cargo-fuzz locates fuzz/Cargo.toml correctly
+          cd services/merkle-engine
           # build+run fuzz target; bound total run time to 60s
           cargo fuzz run tree_append_leaf --release -- -max_total_time=60
