@@ -56,13 +56,24 @@ if (-not (Test-Path $composeFile)) {
     exit 2
 }
 
-Write-Host "Cleaning up any previous compose services..."
+Write-Host "Cleaning up any previous compose services (excluding vault-api)..."
+# bring down everything in case leftovers exist
 docker compose -f $composeFile down -v --remove-orphans || true
-Write-Host "Bringing up docker-compose (in background)..."
-docker compose -f $composeFile up --build -d
+Write-Host "Bringing up dependency services via docker-compose (no vault-api)..."
+# explicitly list the services we need; omit vault-api so we can run it locally
+docker compose -f $composeFile up --build -d postgres redis zookeeper kafka merkle-engine
 
-Write-Host "Waiting 15s for services to start..."
+Write-Host "Waiting 15s for dependency services to start..."
 Start-Sleep -Seconds 15
+
+# start vault-api locally (not in a container) so it can see host JWKS stub easily
+Write-Host "Starting vault-api server locally (HTTP_ADDR=:8080)"
+# ensure environment variables for vault-api match what we expect
+$env:DATABASE_URL = "postgres://vault_api@localhost:5432/vault?sslmode=disable"
+# other envs (ENABLE_TEST_JWT, JWKS_URL) already set above
+pushd services/vault-api/cmd/server
+nohup go run . > /tmp/vault-api.log 2>&1 &
+popd
 
 # If JWKS is required (test-mode disabled and JWKS_URL is set), wait for it to become available
 if (-not $EnableTestJwt -and $env:JWKS_URL) {
@@ -89,9 +100,12 @@ Write-Host "Running e2e tests..."
 go test ./tests/e2e -count=1 -v
 $e2eExit = $LASTEXITCODE
 
-Write-Host "Tearing down docker-compose..."
+Write-Host "Stopping local vault-api process and tearing down docker-compose..."
+# kill the local vault-api if running
+Get-Process -Name go -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "vault-api" } | ForEach-Object { Stop-Process -Id $_.Id -Force }
+
 docker compose -f $composeFile down
-Write-Host "Tearing down docker-compose..."
+Write-Host "Tearing down docker-compose (again to be sure)..."
 docker compose -f $composeFile down
 
 # Cleanup any CI JWKS artifacts that may have been generated
