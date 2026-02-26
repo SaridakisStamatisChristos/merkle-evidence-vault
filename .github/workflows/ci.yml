@@ -126,7 +126,7 @@ jobs:
             echo "/tmp/vault-api.log not found"
           fi
 
-      - name: Load CI envs and run integration helper (no test-jwt)
+      - name: Load CI envs and persist to environment
         shell: bash
         run: |
           # wait for JWKS stub to write its environment file
@@ -135,13 +135,16 @@ jobs:
             sleep 1
           done
           set -o allexport
-          # load variables into this shell; avoid subshell by using process substitution
+          # load variables into this shell for local use (not strictly necessary)
           while IFS= read -r line; do
             export "$line"
           done < <(grep -E '^[A-Z0-9_]+=.*' scripts/ci_jwks_env.txt | sed 's/\r$//')
           set +o allexport
-          # persist to job environment for future steps (not needed for pwsh)
+          # persist for all following steps
           grep -E '^[A-Z0-9_]+=.*' scripts/ci_jwks_env.txt >> $GITHUB_ENV
+      - name: Run integration helper (no test-jwt)
+        shell: bash
+        run: |
           pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false -ApiUrl "http://localhost:8080"
 
       - name: CI cleanup JWKS artifacts
