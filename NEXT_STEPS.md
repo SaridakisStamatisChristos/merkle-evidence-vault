@@ -5,13 +5,13 @@ its current development/test-shim state toward a production-ready system.
 
 Recent progress
 ---------------
-- Added `scripts/run-integration.ps1` — a PowerShell helper that sets E2E environment variables, brings up `docker-compose`, runs integration and e2e tests, and tears down the stack.
-- Implemented JWKS-capable JWT middleware in `services/vault-api/middleware` and removed implicit test-mode fallbacks; unit tests updated to enable explicit test-mode during local testing.
-- Added a `Store` abstraction and a Postgres-backed implementation (`pgStore`) under `services/vault-api/store`; exercised `pgStore` end-to-end by setting `DATABASE_URL` in compose and via the helper script.
-- Updated `ops/docker/docker-compose.yml` to include `DATABASE_URL` and enable local test-mode flags for reproducible developer runs.
-- Added `.github/workflows/ci.yml` to run formatting/linting and the integration+e2e helper in CI.
-- Integration and e2e tests pass locally via the helper script with the Postgres-backed store exercised; smoke/integration/e2e golden-path validated.
-- Performed branch & PR cleanup and consolidated recovered work onto `main`; pushed the recovered WIP changes and verified tests on `main`.
+- [x] Added `scripts/run-integration.ps1` — a PowerShell helper that sets E2E environment variables, brings up `docker-compose`, runs integration and e2e tests, and tears down the stack.
+- [x] Implemented JWKS-capable JWT middleware in `services/vault-api/middleware` and removed implicit test-mode fallbacks; unit tests updated to enable explicit test-mode during local testing.
+- [x] Added a `Store` abstraction and a Postgres-backed implementation (`pgStore`) under `services/vault-api/store`; exercised `pgStore` end-to-end by setting `DATABASE_URL` in compose and via the helper script.
+- [x] Updated `ops/docker/docker-compose.yml` to include `DATABASE_URL` and enable local test-mode flags for reproducible developer runs.
+- [x] Added `.github/workflows/ci.yml` to run formatting/linting and the integration+e2e helper in CI.
+- [x] Integration and e2e tests pass locally via the helper script with the Postgres-backed store exercised; smoke/integration/e2e golden-path validated; CI run is green.
+- [x] Performed branch & PR cleanup and consolidated recovered work onto `main`; pushed the recovered WIP changes and verified tests on `main`.
 
 Immediate next steps
 --------------------
@@ -22,26 +22,16 @@ Immediate next steps
 - Add a lightweight JWKS test harness (local stub server) for developer runs so tests can exercise real JWKS validation without external dependencies. (Owner: backend/test)
 
 
-Context
--------
-- Current: property, integration and e2e tests pass locally. `vault-api` has
-  minimal in-memory implementations for ingest/audit/checkpoints used by e2e.
+- **Context**
+- Current: integration and e2e tests pass locally and CI reports green. `vault-api` has
+  minimal in-memory implementations for ingest/audit/checkpoints used by e2e; a Postgres-backed
+  `pgStore` is available and exercised by integration runs.
 - Primary unresolved risks: frontend XSS (CSP/DOMPurify), merkle-engine
   fuzz coverage, auth (JWT/JWKS), persistent storage for evidence/audit,
   cryptographic checkpoint signing.
 
 Priority 1 — Safety & auth (0-2 weeks)
-- Implement JWKS-backed JWT validation middleware in `services/vault-api/middleware`.
-  - Deliverable: `middleware/jwt.go`, role extraction, unit tests; remove test-shim
-    substring checks in handlers.
-  - Owner: backend
-  - Estimate: 3-5 dev days
-
-- Migrate audit & evidence from in-memory maps to Postgres-backed repositories
-  using existing `persistence/migrations` and `persistence` connector.
-  - Deliverable: repository layer + migrations integration tests
-  - Owner: backend/data
-  - Estimate: 1-2 weeks
+  (Completed: JWKS middleware implemented; Postgres-backed store added and exercised.)
 
 Priority 2 — Integrity hardening (1-3 weeks)
 - Fuzzing: add and run cargo-fuzz targets for `merkle-engine::tree::append_leaf`.
@@ -62,8 +52,6 @@ Priority 3 — Frontend security & UX (1-3 weeks)
   - Estimate: 3-10 days
 
 Priority 4 — CI, observability, and ops (1-2 weeks)
-- Add GitHub Actions workflow to run `gofmt`, `go vet`, unit/property tests,
-  integration and e2e (via docker-compose / service containers) on PRs.
 - Add Prometheus metrics and basic healthchecks to services; add compose
   healthchecks and resource limits.
 
