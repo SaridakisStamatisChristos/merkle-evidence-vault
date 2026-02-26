@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"github.com/SaridakisStamatisChristos/checkpoint-svc/signer"
 )
 
 func main() {
