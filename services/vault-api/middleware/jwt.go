@@ -39,6 +39,7 @@ func JWT(next http.Handler) http.Handler {
         } else {
             log.Info().Str("jwks_url", jwksURL).Msg("JWKS loaded successfully")
         }
+    }
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
