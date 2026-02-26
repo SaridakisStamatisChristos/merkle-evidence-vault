@@ -55,6 +55,13 @@ jobs:
           echo "Scanning repository for go.mod files..."
           find . -name go.mod -not -path "./.git/*" | while read -r mod; do
             dir=$(dirname "$mod")
+            # skip the top-level tests module; it contains integration/e2e suites
+            case "$dir" in
+              ./tests*)
+                echo "Skipping vet in $dir";
+                continue;
+                ;;
+            esac
             echo "Running go vet in: $dir"
             (cd "$dir" && go vet ./...)
           done
@@ -66,6 +73,13 @@ jobs:
           echo "Scanning repository for go.mod files to run tests..."
           find . -name go.mod -not -path "./.git/*" | while read -r mod; do
             dir=$(dirname "$mod")
+            # skip the tests module during lint step; it will be exercised later
+            case "$dir" in
+              ./tests*)
+                echo "Skipping tests in $dir";
+                continue;
+                ;;
+            esac
             echo "Running go test in: $dir"
             (cd "$dir" && go test ./... -count=1 -v)
           done
