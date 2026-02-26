@@ -2,7 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/json"
+	"flag"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"time"
 )
@@ -10,8 +16,42 @@ import (
 func main() {
 	interval := 300 * time.Second
 	if v := os.Getenv("CHECKPOINT_INTERVAL_SECONDS"); v != "" {
-		// ignore parse errors for stub
+		// ignore parse errors for stub; allow overriding via env
 		interval = 60 * time.Second
+	}
+
+	keyPath := flag.String("key", "checkpoint_key.b64", "path to base64 private key")
+	addr := flag.String("addr", ":8081", "http listen addr for signing endpoint")
+	flag.Parse()
+
+	priv, err := loadKey(*keyPath)
+	if err != nil {
+		log.Printf("warning: failed to load signing key (%v); signing endpoint disabled", err)
+	}
+
+	// signing handler
+	if priv != nil {
+		http.HandleFunc("/sign", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				return
+			}
+			b, err := io.ReadAll(r.Body)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			sig := ed25519.Sign(priv, b)
+			enc := base64.StdEncoding.EncodeToString(sig)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{"signature": enc})
+		})
+		go func() {
+			log.Printf("checkpoint-svc signing endpoint listening on %s", *addr)
+			if err := http.ListenAndServe(*addr, nil); err != nil {
+				log.Printf("signing server exited: %v", err)
+			}
+		}()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -31,4 +71,21 @@ func main() {
 			return
 		}
 	}
+}
+
+func loadKey(path string) (ed25519.PrivateKey, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	// trim whitespace/newlines
+	s := string(b)
+	dec, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return nil, err
+	}
+	if len(dec) != ed25519.PrivateKeySize {
+		return nil, err
+	}
+	return ed25519.PrivateKey(dec), nil
 }
