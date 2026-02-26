@@ -100,6 +100,25 @@ jobs:
           # Redirect stdout/stderr to a separate log so the env file stays clean.
           nohup go run scripts/ci_jwks.go > /tmp/ci_jwks.log 2>&1 &
 
+          # Wait for the stub to write scripts/ci_jwks_env.txt so later steps
+          # that read it won't fail. If the file does not appear, dump the
+          # stub log to help debugging and fail the job early.
+          for i in {1..30}; do
+            if [ -f scripts/ci_jwks_env.txt ]; then
+              echo "Found scripts/ci_jwks_env.txt"
+              break
+            fi
+            sleep 1
+          done
+          if [ ! -f scripts/ci_jwks_env.txt ]; then
+            echo "ERROR: scripts/ci_jwks_env.txt not found after waiting";
+            echo "=== /tmp/ci_jwks.log ===";
+            if [ -f /tmp/ci_jwks.log ]; then
+              tail -n +1 /tmp/ci_jwks.log || true
+            fi
+            exit 1
+          fi
+
       # vault-api will be started by the integration helper after JWKS and
       # dependency services are ready. Do not start it here to avoid a race
       # where the server observes no JWKS_URL/ENABLE_TEST_JWT and rejects
