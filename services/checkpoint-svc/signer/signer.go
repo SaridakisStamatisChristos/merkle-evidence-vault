@@ -12,14 +12,18 @@ type Signer interface {
 }
 
 // LocalSigner uses an exported ed25519 private key (in memory) to sign payloads.
-type LocalSigner struct{
+type LocalSigner struct {
     priv ed25519.PrivateKey
 }
 
 func NewLocalSignerFromBase64(b64 string) (*LocalSigner, error) {
     dec, err := base64.StdEncoding.DecodeString(b64)
-    if err != nil { return nil, err }
-    if len(dec) != ed25519.PrivateKeySize { return nil, errors.New("invalid private key size") }
+    if err != nil {
+        return nil, err
+    }
+    if len(dec) != ed25519.PrivateKeySize {
+        return nil, errors.New("invalid private key size")
+    }
     return &LocalSigner{priv: ed25519.PrivateKey(dec)}, nil
 }
 
@@ -33,9 +37,9 @@ func (s *LocalSigner) Sign(b []byte) ([]byte, error) {
 // Sign APIs (AWS KMS, Azure Key Vault, Google Cloud KMS) which typically do
 // not expose the private key material but provide signing RPCs.
 // For now KMSSigner is a stub that returns an informative error.
-type KMSSigner struct{
+type KMSSigner struct {
     Provider string
-    KeyID string
+    KeyID    string
 }
 
 func NewKMSSigner(provider, keyid string) (*KMSSigner, error) {
