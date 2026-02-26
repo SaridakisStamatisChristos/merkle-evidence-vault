@@ -73,6 +73,13 @@ pushd services/vault-api/cmd/server
 nohup go run . > /tmp/vault-api.log 2>&1 &
 popd
 
+# short pause then show initial log entries for debugging
+Start-Sleep -Seconds 2
+if (Test-Path "/tmp/vault-api.log") {
+    Write-Host "=== vault-api initial log ==="
+    Get-Content "/tmp/vault-api.log" | Select-Object -First 20
+}
+
 # If JWKS is required (test-mode disabled and JWKS_URL is set), wait for it to become available
 if (-not $enableBool -and $env:JWKS_URL) {
     Write-Host "Waiting for JWKS at $env:JWKS_URL"
