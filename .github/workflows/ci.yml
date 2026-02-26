@@ -96,8 +96,9 @@ jobs:
 
       - name: Start Go JWKS stub server and generate tokens
         run: |
-          # Start the Go-based JWKS stub; it prints tokens and serves /jwks.json
-          nohup go run scripts/ci_jwks.go > scripts/ci_jwks_env.txt 2>&1 &
+          # Start the Go-based JWKS stub; it writes its own env file and emits logs.
+          # Redirect stdout/stderr to a separate log so the env file stays clean.
+          nohup go run scripts/ci_jwks.go > /tmp/ci_jwks.log 2>&1 &
 
       - name: Start API server
         run: |
@@ -137,8 +138,8 @@ jobs:
             sleep 1
           done
           set -o allexport
-          # strip out any blank lines before exporting
-          grep -v '^$' scripts/ci_jwks_env.txt | sed 's/\r$//' | while IFS= read -r line; do export "$line"; done
+          # only export well-formed KEY=VALUE lines
+          grep -E '^[A-Z0-9_]+=.*' scripts/ci_jwks_env.txt | sed 's/\r$//' | while IFS= read -r line; do export "$line"; done
           set +o allexport
           pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false -ApiUrl "http://localhost:8080" -IngesterToken "$E2E_INGESTER_TOKEN" -AuditorToken "$E2E_AUDITOR_TOKEN"
 
