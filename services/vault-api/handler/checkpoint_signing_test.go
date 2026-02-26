@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -9,7 +8,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/SaridakisStamatisChristos/vault-api/middleware"
 	"github.com/go-chi/chi/v5"
