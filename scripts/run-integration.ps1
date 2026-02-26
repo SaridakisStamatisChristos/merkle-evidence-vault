@@ -63,6 +63,22 @@ docker compose -f $composeFile up --build -d postgres redis zookeeper kafka merk
 
 Write-Host "Waiting 15s for dependency services to start..."
 Start-Sleep -Seconds 15
+# If JWKS is required (test-mode disabled and JWKS_URL is set), wait for it to become available
+if (-not $enableBool -and $env:JWKS_URL) {
+    Write-Host "Waiting for JWKS at $env:JWKS_URL"
+    $attempts = 30
+    for ($i = 0; $i -lt $attempts; $i++) {
+        try {
+            $resp = Invoke-WebRequest -Uri $env:JWKS_URL -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            if ($resp.StatusCode -eq 200) {
+                Write-Host "JWKS is available"
+                break
+            }
+        } catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+}
 
 # start vault-api locally (not in a container) so it can see host JWKS stub easily
 Write-Host "Starting vault-api server locally (HTTP_ADDR=:8080)"
@@ -78,23 +94,6 @@ Start-Sleep -Seconds 2
 if (Test-Path "/tmp/vault-api.log") {
     Write-Host "=== vault-api initial log ==="
     Get-Content "/tmp/vault-api.log" | Select-Object -First 20
-}
-
-# If JWKS is required (test-mode disabled and JWKS_URL is set), wait for it to become available
-if (-not $enableBool -and $env:JWKS_URL) {
-    Write-Host "Waiting for JWKS at $env:JWKS_URL"
-    $attempts = 15
-    for ($i = 0; $i -lt $attempts; $i++) {
-        try {
-            $resp = Invoke-WebRequest -Uri $env:JWKS_URL -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-            if ($resp.StatusCode -eq 200) {
-                Write-Host "JWKS is available"
-                break
-            }
-        } catch {
-            Start-Sleep -Seconds 1
-        }
-    }
 }
 
 Write-Host "Running integration tests..."

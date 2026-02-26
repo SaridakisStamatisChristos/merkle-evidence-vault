@@ -27,17 +27,28 @@ func JWT(next http.Handler) http.Handler {
 	var jwks *keyfunc.JWKS
 	jwksURL := os.Getenv("JWKS_URL")
 	enableTest := os.Getenv("ENABLE_TEST_JWT") == "true"
+
+	// Log configured mode so CI/debugging can see what path we'll take
+	log.Info().Str("jwks_url", jwksURL).Bool("enable_test_jwt", enableTest).Msg("JWT middleware configuration")
+
 	if jwksURL != "" {
-		// try to fetch JWKS; log errors so we can debug when it fails
+		// If initial fetch fails, retry a few times with short backoff so
+		// transient ordering (stub not yet listening) doesn't leave us
+		// permanently with jwks==nil.
 		var err error
-		jwks, err = keyfunc.Get(jwksURL, keyfunc.Options{RefreshInterval: time.Hour})
-		if err != nil {
-			log.Error().Err(err).Str("jwks_url", jwksURL).Msg("failed to load JWKS")
+		maxAttempts := 12
+		for i := 0; i < maxAttempts; i++ {
+			jwks, err = keyfunc.Get(jwksURL, keyfunc.Options{RefreshInterval: time.Hour})
+			if err == nil && jwks != nil {
+				log.Info().Str("jwks_url", jwksURL).Msg("JWKS loaded successfully")
+				break
+			}
+			// Log attempt info and sleep before retrying
+			log.Warn().Err(err).Int("attempt", i+1).Int("max_attempts", maxAttempts).Str("jwks_url", jwksURL).Msg("failed to load JWKS, will retry")
+			time.Sleep(2 * time.Second)
 		}
 		if jwks == nil {
-			log.Warn().Str("jwks_url", jwksURL).Msg("jwks client is nil after fetch")
-		} else {
-			log.Info().Str("jwks_url", jwksURL).Msg("JWKS loaded successfully")
+			log.Error().Str("jwks_url", jwksURL).Msg("giving up loading JWKS after retries; falling back to test-mode only if enabled")
 		}
 	}
 

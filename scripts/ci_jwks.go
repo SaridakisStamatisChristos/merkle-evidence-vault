@@ -66,6 +66,11 @@ func main() {
 
 	jwksBytes, _ := json.Marshal(jwks)
 
+	// Persist JWKS to disk for CI debugging and comparative checks
+	if err := os.WriteFile("scripts/jwks.json", jwksBytes, 0o600); err != nil {
+		log.Printf("warning: failed to write jwks.json: %v", err)
+	}
+
 	// HTTP handlers
 	http.HandleFunc("/jwks.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
