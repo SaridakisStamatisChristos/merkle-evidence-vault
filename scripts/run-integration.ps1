@@ -2,8 +2,20 @@ Param(
     [string]$ApiUrl = 'http://localhost:8080',
     [string]$IngesterToken = 'ingester-token-example',
     [string]$AuditorToken = 'auditor-token-example',
-    [bool]$EnableTestJwt = $true
+    # allow string input so CI can pass literal text without PowerShell binding errors
+    [string]$EnableTestJwt = 'true'
 )
+
+# convert string to boolean; accept typical truthy values
+$enableBool = $false
+if ($EnableTestJwt -ne $null) {
+    try {
+        $enableBool = [bool]::Parse($EnableTestJwt)
+    } catch {
+        # fallback: treat any non-empty string as true
+        if ($EnableTestJwt -ne '') { $enableBool = $true }
+    }
+}
 
 Write-Host "Setting E2E environment variables..."
 $env:E2E_API_URL = $ApiUrl
