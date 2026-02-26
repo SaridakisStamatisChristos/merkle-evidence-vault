@@ -105,6 +105,33 @@ if (Test-Path "/tmp/vault-api.log") {
     Get-Content "/tmp/vault-api.log" | Select-Object -First 20
 }
 
+# Wait for vault-api to become healthy before running tests
+Write-Host "Waiting for vault-api at $ApiUrl/healthz"
+$healthAttempts = 60
+for ($j = 0; $j -lt $healthAttempts; $j++) {
+    try {
+        $h = Invoke-WebRequest -Uri ($ApiUrl + "/healthz") -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        if ($h.StatusCode -eq 200) {
+            Write-Host "vault-api is healthy"
+            break
+        }
+    } catch {
+        Start-Sleep -Seconds 1
+    }
+}
+try {
+    $check = Invoke-WebRequest -Uri ($ApiUrl + "/healthz") -UseBasicParsing -TimeoutSec 2
+    if ($check.StatusCode -ne 200) {
+        Write-Host "ERROR: vault-api did not become healthy; dumping /tmp/vault-api.log"
+        if (Test-Path "/tmp/vault-api.log") { Get-Content "/tmp/vault-api.log" }
+        exit 1
+    }
+} catch {
+    Write-Host "ERROR: vault-api did not become healthy; dumping /tmp/vault-api.log"
+    if (Test-Path "/tmp/vault-api.log") { Get-Content "/tmp/vault-api.log" }
+    exit 1
+}
+
 Write-Host "Running integration tests..."
 go test ./tests/integration -count=1 -v
 $intExit = $LASTEXITCODE
