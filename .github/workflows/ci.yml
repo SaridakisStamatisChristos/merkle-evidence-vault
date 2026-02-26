@@ -140,10 +140,10 @@ jobs:
           set +o allexport
           # persist for all following steps
           grep -E '^[A-Z0-9_]+=.*' scripts/ci_jwks_env.txt >> $GITHUB_ENV
-      - name: Run integration helper (with test-jwt enabled as a short-term CI fallback)
+      - name: Run integration helper (use JWKS stub for real verification)
         shell: bash
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$true -ApiUrl "http://localhost:8080"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false -ApiUrl "http://localhost:8080"
 
       - name: CI cleanup JWKS artifacts
         run: |
