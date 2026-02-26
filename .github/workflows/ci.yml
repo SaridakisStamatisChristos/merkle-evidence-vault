@@ -100,31 +100,10 @@ jobs:
           # Redirect stdout/stderr to a separate log so the env file stays clean.
           nohup go run scripts/ci_jwks.go > /tmp/ci_jwks.log 2>&1 &
 
-      - name: Start API server
-        run: |
-          echo "Starting vault-api server in background (HTTP_ADDR=:8080)"
-          pushd services/vault-api/cmd/server
-          nohup env HTTP_ADDR=":8080" go run . > /tmp/vault-api.log 2>&1 &
-          popd
-          for i in {1..60}; do
-            if curl -sSf http://localhost:8080/healthz >/dev/null 2>&1; then
-              echo "vault-api ready"
-              break
-            fi
-            sleep 2
-          done
-          if ! curl -sSf http://localhost:8080/healthz >/dev/null 2>&1; then
-            echo "vault-api failed to start"; exit 1
-          fi
-
-      - name: Dump vault-api startup log
-        run: |
-          echo "=== /tmp/vault-api.log ==="
-          if [ -f /tmp/vault-api.log ]; then
-            tail -n +1 /tmp/vault-api.log || true
-          else
-            echo "/tmp/vault-api.log not found"
-          fi
+      # vault-api will be started by the integration helper after JWKS and
+      # dependency services are ready. Do not start it here to avoid a race
+      # where the server observes no JWKS_URL/ENABLE_TEST_JWT and rejects
+      # requests with 401.
 
       - name: Load CI envs and persist to environment
         shell: bash
