@@ -31,6 +31,10 @@ if (-not $env:JWKS_URL -and (Test-Path "scripts/ci_jwks_env.txt")) {
         }
     }
 }
+# containers cannot see host localhost; use docker host alias when running inside compose
+if ($env:JWKS_URL -and $env:JWKS_URL -match '^http://localhost:(\d+)') {
+    $env:JWKS_URL = $env:JWKS_URL -replace '^http://localhost:', 'http://host.docker.internal:'
+}
 
 Write-Host "E2E_API_URL=$env:E2E_API_URL"
 Write-Host "E2E_INGESTER_TOKEN=$($env:E2E_INGESTER_TOKEN)"
@@ -40,9 +44,11 @@ if ($enableBool) {
     Write-Host "Enabling test JWT mode for local runs"
     $env:ENABLE_TEST_JWT = 'true'
 } else {
-    Write-Host "Test JWT mode disabled for this run"
-    if ($env:ENABLE_TEST_JWT) { Remove-Item Env:\ENABLE_TEST_JWT }
+    Write-Host "Disabling test JWT mode for this run"
+    # explicitly set to false so docker-compose substitution works
+    $env:ENABLE_TEST_JWT = 'false'
 }
+Write-Host "Effective ENABLE_TEST_JWT=$env:ENABLE_TEST_JWT"
 
 $composeFile = "ops/docker/docker-compose.yml"
 if (-not (Test-Path $composeFile)) {
@@ -50,6 +56,8 @@ if (-not (Test-Path $composeFile)) {
     exit 2
 }
 
+Write-Host "Cleaning up any previous compose services..."
+docker compose -f $composeFile down -v --remove-orphans || true
 Write-Host "Bringing up docker-compose (in background)..."
 docker compose -f $composeFile up --build -d
 
