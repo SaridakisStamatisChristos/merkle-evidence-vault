@@ -1,0 +1,8 @@
+[package]
+name = "merkle-fuzz"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+merkle-engine = { path = ".." }
+rand = "0.8"

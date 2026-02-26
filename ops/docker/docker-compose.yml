@@ -47,5 +47,7 @@ services:
     ports:
       - "8080:8443"
   checkpoint-svc:
-    image: busybox
-    command: ["sh","-c","sleep 3600"]
+    build:
+      context: ../../
+      dockerfile: services/checkpoint-svc/Dockerfile
+    depends_on: [merkle-engine]
