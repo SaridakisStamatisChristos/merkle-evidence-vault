@@ -40,8 +40,11 @@ services:
       dockerfile: ops/docker/Dockerfile.vault-api
     depends_on: [postgres, redis, kafka, merkle-engine]
     environment:
-      - ENABLE_TEST_JWT=true
+      # allow overriding test mode from the host environment; default to true for local dev
+      - ENABLE_TEST_JWT=${ENABLE_TEST_JWT:-true}
       - DATABASE_URL=postgres://vault_api@postgres:5432/vault?sslmode=disable
+      # when not in test mode, JWTs will be verified against this JWKS URL
+      - JWKS_URL=${JWKS_URL}
     ports:
       - "8080:8443"
   checkpoint-svc:
