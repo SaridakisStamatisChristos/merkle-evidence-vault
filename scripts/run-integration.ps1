@@ -40,7 +40,7 @@ if (-not (Test-Path $composeFile)) {
 }
 
 Write-Host "Bringing up docker-compose (in background)..."
-docker-compose -f $composeFile up --build -d
+docker compose -f $composeFile up --build -d
 
 Write-Host "Waiting 15s for services to start..."
 Start-Sleep -Seconds 15
@@ -71,9 +71,9 @@ go test ./tests/e2e -count=1 -v
 $e2eExit = $LASTEXITCODE
 
 Write-Host "Tearing down docker-compose..."
-docker-compose -f $composeFile down
+docker compose -f $composeFile down
 Write-Host "Tearing down docker-compose..."
-docker-compose -f $composeFile down
+docker compose -f $composeFile down
 
 # Cleanup any CI JWKS artifacts that may have been generated
 if (Test-Path "scripts/ci_jwks_env.txt") {
