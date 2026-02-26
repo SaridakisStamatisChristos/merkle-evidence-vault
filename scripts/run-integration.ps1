@@ -31,10 +31,8 @@ if (-not $env:JWKS_URL -and (Test-Path "scripts/ci_jwks_env.txt")) {
         }
     }
 }
-# containers cannot see host localhost; use docker host alias when running inside compose
-if ($env:JWKS_URL -and $env:JWKS_URL -match '^http://localhost:(\d+)') {
-    $env:JWKS_URL = $env:JWKS_URL -replace '^http://localhost:', 'http://host.docker.internal:'
-}
+# vault-api is running locally so it can reach the stub via localhost; no translation needed
+# (previous container-based logic removed)
 
 Write-Host "E2E_API_URL=$env:E2E_API_URL"
 Write-Host "E2E_INGESTER_TOKEN=$($env:E2E_INGESTER_TOKEN)"
