@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *' # daily at 02:00 UTC
 
 jobs:
   fuzz-asan:
@@ -39,3 +41,50 @@ jobs:
           cd services/merkle-engine
           # build+run fuzz target; bound total run time to 60s
           cargo fuzz run tree_append_leaf --release -- -max_total_time=60
+
+      - name: Upload fuzz artifacts (short run)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-short
+          path: services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
+
+  # Scheduled longer fuzz runs to increase coverage and collect crashes
+  fuzz-scheduled:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake build-essential libssl-dev pkg-config
+
+      - name: Set up Rust (nightly)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: rust-src
+          override: true
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Run scheduled fuzz (10m)
+        env:
+          RUSTFLAGS: "-Z sanitizer=address"
+          RUSTDOCFLAGS: "-Z sanitizer=address"
+          ASAN_OPTIONS: "verbosity=1:detect_leaks=1"
+        run: |
+          cd services/merkle-engine
+          # bound this scheduled run to 600s (10m)
+          cargo fuzz run tree_append_leaf --release -- -max_total_time=600
+
+      - name: Upload scheduled fuzz artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-scheduled
+          path: services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
