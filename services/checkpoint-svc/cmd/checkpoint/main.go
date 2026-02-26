@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+
 	"github.com/SaridakisStamatisChristos/checkpoint-svc/signer"
 )
 
@@ -86,6 +87,7 @@ func main() {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{"signature": enc})
 		})
+
 		go func() {
 			log.Printf("checkpoint-svc signing endpoint listening on %s", *addr)
 			if err := http.ListenAndServe(*addr, nil); err != nil {
