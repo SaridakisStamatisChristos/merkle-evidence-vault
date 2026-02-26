@@ -48,7 +48,7 @@ if ($enableBool) {
     # explicitly set to false so docker-compose substitution works
     $env:ENABLE_TEST_JWT = 'false'
 }
-Write-Host "Effective ENABLE_TEST_JWT=$env:ENABLE_TEST_JWT"
+Write-Host "enableBool=$enableBool, Effective ENABLE_TEST_JWT=$env:ENABLE_TEST_JWT"
 
 $composeFile = "ops/docker/docker-compose.yml"
 if (-not (Test-Path $composeFile)) {
@@ -76,7 +76,7 @@ nohup go run . > /tmp/vault-api.log 2>&1 &
 popd
 
 # If JWKS is required (test-mode disabled and JWKS_URL is set), wait for it to become available
-if (-not $EnableTestJwt -and $env:JWKS_URL) {
+if (-not $enableBool -and $env:JWKS_URL) {
     Write-Host "Waiting for JWKS at $env:JWKS_URL"
     $attempts = 15
     for ($i = 0; $i -lt $attempts; $i++) {
