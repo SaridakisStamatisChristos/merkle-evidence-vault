@@ -123,8 +123,8 @@ jobs:
             sleep 1
           done
           set -o allexport
-          grep -v '^\
-' scripts/ci_jwks_env.txt | sed 's/\r$//' | while IFS= read -r line; do export "$line"; done
+          # strip out any blank lines before exporting
+          grep -v '^$' scripts/ci_jwks_env.txt | sed 's/\r$//' | while IFS= read -r line; do export "$line"; done
           set +o allexport
           pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false -ApiUrl "http://localhost:8080" -IngesterToken "$E2E_INGESTER_TOKEN" -AuditorToken "$E2E_AUDITOR_TOKEN"
 
