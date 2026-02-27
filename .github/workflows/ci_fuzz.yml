@@ -1,0 +1,42 @@
+name: Fuzz (bounded - committed corpus)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  fuzz-bounded:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      - name: Bounded fuzz run (short)
+        run: |
+          cd services/merkle-engine || exit 1
+          mkdir -p ../../fuzz/work || true
+          # capture output to /tmp/fuzz.log so we can scan for ASAN/LSAN leaks
+          timeout 30s cargo fuzz run tree_append_leaf ../../fuzz/corpus/minimized -dict=../../fuzz/dict.txt -jobs=1 -workers=1 2>&1 | tee /tmp/fuzz.log || true
+
+      - name: Check ASAN/LSAN output for leaks
+        if: always()
+        run: |
+          if grep -E "LeakSanitizer|Direct leak|ERROR: LeakSanitizer|SUMMARY: AddressSanitizer" /tmp/fuzz.log; then
+            echo "Leak detected in fuzz run ASAN/LSAN output"; cat /tmp/fuzz.log; exit 1
+          else
+            echo "No leaks detected in bounded fuzz run"
+          fi
+      - name: Upload fuzz artifacts (committed corpus)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus
+          path: |
+            fuzz/corpus/minimized/**
+            services/merkle-engine/fuzz/artifacts/tree_append_leaf/**

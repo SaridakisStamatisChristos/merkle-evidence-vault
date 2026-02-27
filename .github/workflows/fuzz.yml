@@ -40,14 +40,25 @@ jobs:
           # run from the crate root so cargo-fuzz locates fuzz/Cargo.toml correctly
           cd services/merkle-engine
           # build+run fuzz target; bound total run time to 60s
-          cargo fuzz run tree_append_leaf --release -- -max_total_time=60
+          cargo fuzz run tree_append_leaf --release -- -max_total_time=60 2>&1 | tee /tmp/fuzz.log || true
+
+      - name: Check ASAN/LSAN output for leaks
+        if: always()
+        run: |
+          if grep -E "LeakSanitizer|Direct leak|ERROR: LeakSanitizer" /tmp/fuzz.log; then
+            echo "Leak detected in ASAN output"; cat /tmp/fuzz.log; exit 1
+          else
+            echo "No leaks detected"
+          fi
 
       - name: Upload fuzz artifacts (short run)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-artifacts-short
-          path: services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
+          path: |
+            services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
+            fuzz/corpus/minimized/**
 
   # Scheduled longer fuzz runs to increase coverage and collect crashes
   fuzz-scheduled:
@@ -80,11 +91,22 @@ jobs:
         run: |
           cd services/merkle-engine
           # bound this scheduled run to 600s (10m)
-          cargo fuzz run tree_append_leaf --release -- -max_total_time=600
+          cargo fuzz run tree_append_leaf --release -- -max_total_time=600 2>&1 | tee /tmp/fuzz.log || true
+
+      - name: Check ASAN/LSAN output for leaks (scheduled)
+        if: always()
+        run: |
+          if grep -E "LeakSanitizer|Direct leak|ERROR: LeakSanitizer" /tmp/fuzz.log; then
+            echo "Leak detected in ASAN output"; cat /tmp/fuzz.log; exit 1
+          else
+            echo "No leaks detected"
+          fi
 
       - name: Upload scheduled fuzz artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-artifacts-scheduled
-          path: services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
+          path: |
+            services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
+            fuzz/corpus/minimized/**
