@@ -3,7 +3,15 @@ name: "Fuzz (ASAN)"
 on:
   workflow_dispatch:
   push:
-    branches: [ main, fuzz/asan-ci ]
+    branches:
+      - '**'
+    paths:
+      - '.github/workflows/fuzz.yml'
+      - 'services/merkle-engine/**'
+  pull_request:
+    paths:
+      - '.github/workflows/fuzz.yml'
+      - 'services/merkle-engine/**'
   schedule:
     - cron: '0 2 * * *' # daily at 02:00 UTC
 
