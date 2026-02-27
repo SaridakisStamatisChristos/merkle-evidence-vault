@@ -11,3 +11,33 @@
 *.tmp
 Thumbs.db
 .DS_Store
+
+# Rust
+**/target/
+*.rlib
+*.rmeta
+*.d
+
+# cargo-fuzz
+services/merkle-engine/fuzz/target/
+
+# Node
+**/node_modules/
+dist/
+build/
+.vite/
+
+# Windows binaries
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.lib
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs/temp
+*.log
+*.tmp
