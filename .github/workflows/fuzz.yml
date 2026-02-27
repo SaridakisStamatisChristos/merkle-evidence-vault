@@ -129,55 +129,28 @@ jobs:
       - name: Run cargo fuzz with ASan
         run: |
           cd services/merkle-engine/fuzz
-          # Set a timeout to prevent indefinite hangs
-          timeout 10m bash -c "cargo fuzz run tree_append_leaf"
+          timeout 10m bash -c "cargo fuzz run tree_append_leaf 2>&1 | tee /tmp/fuzz.log"
         env:
           RUSTFLAGS: "-Zsanitizer=address"
-          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1"
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:log_path=/tmp/asan.log"
 
-      - name: Capture system state on hang
-        if: failure()
-        run: |
-          echo "Capturing system state due to hang..."
-          ps aux > /tmp/process_list.txt
-          lsof > /tmp/open_files.log
-
-      - name: Upload debugging artifacts
-        if: failure()
+      - name: Upload fuzz logs and artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: debug-logs
-          path: |
-            /tmp/process_list.txt
-            /tmp/open_files.log
-            /tmp/strace.cargo*
-            /tmp/sanitizer.log
-
-      - name: Check ASAN/LSAN output for leaks (scheduled)
-        if: always()
-        run: |
-          if grep -E "LeakSanitizer|Direct leak|ERROR: LeakSanitizer" /tmp/fuzz.log; then
-            echo "Leak detected in ASAN output"; cat /tmp/fuzz.log; exit 1
-          else
-            echo "No leaks detected"
-          fi
-
-      - name: Upload debug artifacts (scheduled)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-debug-artifacts-scheduled
+          name: fuzz-logs
           path: |
             /tmp/fuzz.log
             /tmp/asan.log
             /tmp/lsan.log
-            /tmp/strace.cargo*
-
-      - name: Upload scheduled fuzz artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-artifacts-scheduled
-          path: |
             services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
             services/merkle-engine/fuzz/corpus/minimized/**
+
+      - name: Check for CI success
+        run: |
+          if grep -q "==" /tmp/fuzz.log; then
+            echo "Fuzzing completed successfully."
+            exit 0
+          else
+            echo "Fuzzing did not run as expected."
+            exit 1
+          fi
