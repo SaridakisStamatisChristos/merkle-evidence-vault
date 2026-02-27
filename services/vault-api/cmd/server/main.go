@@ -36,6 +36,7 @@ func main() {
 		// audit and checkpoint endpoints (JWT middleware)
 		r.With(middleware.JWT).Get("/audit", h.GetAudit)
 		r.With(middleware.JWT).Get("/checkpoints/latest", h.GetCheckpointsLatest)
+		r.With(middleware.JWT).Get("/checkpoints/latest/verify", h.VerifyLatestCheckpoint)
 	})
 
 	addr := os.Getenv("HTTP_ADDR")
