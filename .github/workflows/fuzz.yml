@@ -70,6 +70,17 @@ jobs:
             echo "No leaks detected"
           fi
 
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-debug-artifacts
+          path: |
+            /tmp/fuzz.log
+            /tmp/asan.log
+            /tmp/lsan.log
+            /tmp/strace.cargo*
+
       - name: Upload fuzz artifacts (short run)
         if: always()
         uses: actions/upload-artifact@v4
@@ -140,6 +151,17 @@ jobs:
           else
             echo "No leaks detected"
           fi
+
+      - name: Upload debug artifacts (scheduled)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-debug-artifacts-scheduled
+          path: |
+            /tmp/fuzz.log
+            /tmp/asan.log
+            /tmp/lsan.log
+            /tmp/strace.cargo*
 
       - name: Upload scheduled fuzz artifacts
         if: always()
