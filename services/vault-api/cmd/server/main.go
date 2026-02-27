@@ -14,6 +14,7 @@ import (
 
 func main() {
 	r := chi.NewRouter()
+	r.Use(middleware.SecurityHeaders)
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)

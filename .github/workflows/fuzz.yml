@@ -108,11 +108,16 @@ jobs:
             exit 1
           fi
 
+      - name: Minimize crash artifacts
+        if: always()
+        run: ./fuzz/minimize_crash.sh tree_append_leaf
+
       - name: Upload fuzz artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-asan-artifacts
+          retention-days: 30
           path: |
             /tmp/fuzz.log
             services/merkle-engine/fuzz/fuzz-*.log
@@ -195,11 +200,16 @@ jobs:
             exit 1
           fi
 
+      - name: Minimize scheduled crash artifacts
+        if: always()
+        run: ./fuzz/minimize_crash.sh tree_append_leaf
+
       - name: Upload scheduled artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-scheduled-artifacts
+          retention-days: 30
           path: |
             /tmp/fuzz.log
             services/merkle-engine/fuzz/fuzz-*.log
