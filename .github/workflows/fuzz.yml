@@ -1,16 +1,15 @@
-name: Fuzz (ASAN)
+name: "Fuzz (ASAN)"
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, fuzz/asan-ci ]
   schedule:
     - cron: '0 2 * * *' # daily at 02:00 UTC
 
 jobs:
   fuzz-asan:
     runs-on: ubuntu-latest
-    # overall job timeout to avoid runaway CI usage
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -19,7 +18,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake build-essential libssl-dev pkg-config
+          sudo apt-get install -y clang cmake build-essential libssl-dev pkg-config strace lld libclang-dev
 
       - name: Set up Rust (nightly)
         uses: actions-rs/toolchain@v1
@@ -29,7 +28,7 @@ jobs:
           override: true
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz || true
 
       - name: Build and run fuzz target (ASAN)
         env:
@@ -40,9 +39,7 @@ jobs:
           ASAN_OPTIONS: "verbosity=2:detect_leaks=1:log_path=/tmp/asan.log:abort_on_error=1:allow_user_segv_handler=1:malloc_context_size=30"
           LSAN_OPTIONS: "verbosity=1:log_threads=1:log_path=/tmp/lsan.log"
         run: |
-          # run from the crate root so cargo-fuzz locates fuzz/Cargo.toml correctly
           set -o pipefail
-          # attempt to locate libasan and preload it so interceptors are available early
           ASAN_LIB=$(gcc -print-file-name=libasan.so 2>/dev/null || true)
           if [ -n "$ASAN_LIB" ] && [ -f "$ASAN_LIB" ]; then
             export LD_PRELOAD="$ASAN_LIB"
@@ -52,9 +49,7 @@ jobs:
           fi
           ulimit -c unlimited || true
           cd services/merkle-engine
-          # build+run fuzz target; bound total run time to 60s
-          cargo fuzz run tree_append_leaf --release -- -max_total_time=60 -workers=1 -rss_limit_mb=512 2>&1 | tee /tmp/fuzz.log || true
-          # surface sanitizer logs if created
+          cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=60 -workers=1 -rss_limit_mb=512 2>&1 | tee /tmp/fuzz.log || true
           if [ -f /tmp/asan.log ]; then echo "--- /tmp/asan.log ---"; sed -n '1,200p' /tmp/asan.log; fi
           if [ -f /tmp/lsan.log ]; then echo "--- /tmp/lsan.log ---"; sed -n '1,200p' /tmp/lsan.log; fi
 
@@ -74,9 +69,8 @@ jobs:
           name: fuzz-artifacts-short
           path: |
             services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
-            fuzz/corpus/minimized/**
+            services/merkle-engine/fuzz/corpus/minimized/**
 
-  # Scheduled longer fuzz runs to increase coverage and collect crashes
   fuzz-scheduled:
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -87,7 +81,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake build-essential libssl-dev pkg-config
+          sudo apt-get install -y clang cmake build-essential libssl-dev pkg-config strace lld libclang-dev
 
       - name: Set up Rust (nightly)
         uses: actions-rs/toolchain@v1
@@ -97,7 +91,7 @@ jobs:
           override: true
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz || true
 
       - name: Run scheduled fuzz (10m)
         env:
@@ -118,8 +112,7 @@ jobs:
           fi
           ulimit -c unlimited || true
           cd services/merkle-engine
-          # bound this scheduled run to 600s (10m)
-          cargo fuzz run tree_append_leaf --release -- -max_total_time=600 -workers=1 -rss_limit_mb=1024 2>&1 | tee /tmp/fuzz.log || true
+          cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=600 -workers=1 -rss_limit_mb=1024 2>&1 | tee /tmp/fuzz.log || true
           if [ -f /tmp/asan.log ]; then echo "--- /tmp/asan.log ---"; sed -n '1,200p' /tmp/asan.log; fi
           if [ -f /tmp/lsan.log ]; then echo "--- /tmp/lsan.log ---"; sed -n '1,200p' /tmp/lsan.log; fi
 
@@ -139,4 +132,4 @@ jobs:
           name: fuzz-artifacts-scheduled
           path: |
             services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
-            fuzz/corpus/minimized/**
+            services/merkle-engine/fuzz/corpus/minimized/**
