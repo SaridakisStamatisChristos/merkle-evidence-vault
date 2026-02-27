@@ -40,10 +40,10 @@ This document tracks prioritized tasks moving the project from development/test-
 - [ ] Add Prometheus metrics and dashboard/alerts across `vault-api`, `merkle-engine`, and `checkpoint-svc`.
 
 ## Low priority / longer term
-- [ ] Replace test-only checkpoint signature flow with fully verifiable STHs in the audit trail.
+- [~] Replace test-only checkpoint signature flow with verifiable STH endpoints in the audit trail (latest verification endpoint added; full persisted STH history still pending).
 
 ## Suggested execution order
-1. Add verifiable STH exposure/verification in audit APIs.
-2. Finish production JWT/JWKS hardening pass.
-3. Add/verify CSP policy for any non-API hosted dashboard surface.
-4. Add observability metrics + dashboards/alerts.
+1. Finish production JWT/JWKS threat-model review + failure-mode testing.
+2. Add/verify CSP policy for any non-API hosted dashboard surface.
+3. Add observability metrics + dashboards/alerts.
+4. Expand checkpoint flow from latest-only verification to persisted verifiable STH history.
