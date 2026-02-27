@@ -155,7 +155,16 @@ if ($IsWindows) {
     } -ArgumentList $serverDir.Path,$logPath | Out-Null
 } else {
     Write-Host "Starting vault-api (Unix) in $($serverDir.Path)"
-    Start-Process -FilePath "bash" -ArgumentList "-c", "cd '$($serverDir.Path)' && nohup go run . > '$logPath' 2>&1 &" -NoNewWindow | Out-Null
+    # Use bash -lc to start the server in background; this is more reliable in CI runners
+    bash -lc "cd '$($serverDir.Path)' && nohup go run . > '$logPath' 2>&1 &"
+
+    # short wait and basic diagnostics if log not created
+    Start-Sleep -Seconds 2
+    if (-not (Test-Path $logPath)) {
+        Write-Host "vault-api log not found at $logPath; dumping process list and /tmp contents for debugging"
+        bash -lc "ps aux | grep '[v]ault-api' || true"
+        bash -lc "ls -l /tmp | grep vault-api || true"
+    }
 }
 
 # short pause then show initial log entries for debugging
