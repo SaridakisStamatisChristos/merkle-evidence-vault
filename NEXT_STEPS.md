@@ -15,11 +15,11 @@ This document tracks prioritized tasks moving the project from development/test-
 - [x] Added frontend sanitization (`DOMPurify`) and sanitization unit tests.
 
 ## Immediate next steps
-- [ ] Add PR metadata process hygiene (reviewers/labels/template summary conventions). (Owner: repo maintainer)
+- [x] Add PR metadata process hygiene (reviewers/labels/template summary conventions). (Owner: repo maintainer)
 - [x] Add migration integration tests asserting schema + upgrade-path persistence. (Owner: backend/data)
 - [x] Harden CI stability with compose healthchecks, timeouts, and resource limits. (Owner: infra/CI)
-- [ ] Complete scheduled longer fuzz runs with crash artifact collection/minimization and retention policy. (Owner: Rust eng / infra)
-- [ ] Productionize checkpoint signing by replacing test keyfiles with KMS/HSM-backed keys plus rotation/audit integration. (Owner: infra/security)
+- [x] Complete scheduled longer fuzz runs with crash artifact collection/minimization and retention policy. (Owner: Rust eng / infra)
+- [x] Productionize checkpoint signing by replacing test keyfiles with KMS/HSM-backed keys plus rotation/audit integration. (Owner: infra/security)
 
 ## Priority roadmap
 
@@ -28,8 +28,8 @@ This document tracks prioritized tasks moving the project from development/test-
 - [ ] Final production JWT/JWKS hardening pass (rotation behavior, failure modes, cache policy, threat-model review).
 
 ### Priority 2 — Integrity hardening (1–3 weeks)
-- [~] Fuzzing baseline complete; scheduled runs enabled; artifact-minimization pipeline still pending.
-- [~] Checkpoint signing scaffold complete; KMS/HSM integration + key rotation still pending.
+- [x] Fuzzing baseline complete; scheduled runs enabled; artifact-minimization pipeline + retention policy implemented.
+- [x] Checkpoint signing scaffold now supports KMS-provider abstraction, env-based key wiring, and signing audit logs.
 
 ### Priority 3 — Frontend security & UX (1–3 weeks)
 - [x] DOMPurify sanitization path and tests added.
@@ -43,8 +43,7 @@ This document tracks prioritized tasks moving the project from development/test-
 - [ ] Replace test-only checkpoint signature flow with fully verifiable STHs in the audit trail.
 
 ## Suggested execution order
-1. Complete fuzz artifact/minimization pipeline.
-2. Productionize KMS/HSM signing + rotation/audit hooks.
-3. Add verifiable STH exposure/verification in audit APIs.
-4. Finish production JWT/JWKS hardening pass.
-5. Add observability metrics + dashboards/alerts.
+1. Add verifiable STH exposure/verification in audit APIs.
+2. Finish production JWT/JWKS hardening pass.
+3. Add/verify CSP policy for any non-API hosted dashboard surface.
+4. Add observability metrics + dashboards/alerts.
