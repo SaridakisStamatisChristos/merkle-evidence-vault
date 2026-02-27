@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,21 +21,27 @@ const (
 )
 
 // JWT is a middleware that validates a Bearer token. If JWKS_URL env var is set
-// it will verify signatures using the JWKS. Otherwise it falls back to a simple
-// test-mode that maps token text to roles (keeps tests/dev ergonomics).
+// it verifies signatures using the JWKS endpoint. If JWKS is not configured,
+// test-mode token mapping can be enabled explicitly via ENABLE_TEST_JWT=true.
 func JWT(next http.Handler) http.Handler {
-	// build JWKS client lazily
 	var jwks *keyfunc.JWKS
 	jwksURL := os.Getenv("JWKS_URL")
 	enableTest := os.Getenv("ENABLE_TEST_JWT") == "true"
+	requiredIssuer := strings.TrimSpace(os.Getenv("JWT_REQUIRED_ISSUER"))
+	requiredAudience := parseCSVEnv("JWT_REQUIRED_AUDIENCE")
+	allowedAlgs := parseCSVEnvDefault("JWT_ALLOWED_ALGS", []string{"RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA"})
+	clockSkew := parseIntEnvDefault("JWT_CLOCK_SKEW_SECONDS", 60)
 
-	// Log configured mode so CI/debugging can see what path we'll take
-	log.Info().Str("jwks_url", jwksURL).Bool("enable_test_jwt", enableTest).Msg("JWT middleware configuration")
+	log.Info().
+		Str("jwks_url", jwksURL).
+		Bool("enable_test_jwt", enableTest).
+		Str("required_issuer", requiredIssuer).
+		Strs("required_audience", requiredAudience).
+		Strs("allowed_algs", allowedAlgs).
+		Int64("clock_skew_seconds", clockSkew).
+		Msg("JWT middleware configuration")
 
 	if jwksURL != "" {
-		// If initial fetch fails, retry a few times with short backoff so
-		// transient ordering (stub not yet listening) doesn't leave us
-		// permanently with jwks==nil.
 		var err error
 		maxAttempts := 12
 		for i := 0; i < maxAttempts; i++ {
@@ -43,7 +50,6 @@ func JWT(next http.Handler) http.Handler {
 				log.Info().Str("jwks_url", jwksURL).Msg("JWKS loaded successfully")
 				break
 			}
-			// Log attempt info and sleep before retrying
 			log.Warn().Err(err).Int("attempt", i+1).Int("max_attempts", maxAttempts).Str("jwks_url", jwksURL).Msg("failed to load JWKS, will retry")
 			time.Sleep(2 * time.Second)
 		}
@@ -53,57 +59,36 @@ func JWT(next http.Handler) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := r.Header.Get("Authorization")
-		if auth == "" {
-			w.WriteHeader(401)
+		tokenStr, ok := extractBearerToken(r.Header.Get("Authorization"))
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		tokenStr := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer"))
-		tokenStr = strings.TrimSpace(tokenStr)
 
-		// JWKS mode
 		if jwks != nil {
-			token, err := jwt.Parse(tokenStr, jwks.Keyfunc)
+			claims := jwt.MapClaims{}
+			token, err := jwt.ParseWithClaims(tokenStr, claims, jwks.Keyfunc, jwt.WithValidMethods(allowedAlgs))
 			if err != nil || !token.Valid {
-				w.WriteHeader(401)
+				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				// extract roles claim if present
-				var roles []string
-				if rc, ok := claims["roles"]; ok {
-					switch v := rc.(type) {
-					case []interface{}:
-						for _, it := range v {
-							if s, ok := it.(string); ok {
-								roles = append(roles, s)
-							}
-						}
-					case string:
-						roles = append(roles, v)
-					}
-				}
-				// subject
-				var sub string
-				if s, ok := claims["sub"].(string); ok {
-					sub = s
-				}
-				ctx := context.WithValue(r.Context(), ctxKeyRoles, roles)
-				ctx = context.WithValue(ctx, ctxKeySub, sub)
-				next.ServeHTTP(w, r.WithContext(ctx))
+			if !validateStandardClaims(claims, requiredIssuer, requiredAudience, time.Now(), time.Duration(clockSkew)*time.Second) {
+				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			w.WriteHeader(401)
+			roles := parseRoles(claims)
+			sub, _ := claims["sub"].(string)
+			ctx := context.WithValue(r.Context(), ctxKeyRoles, roles)
+			ctx = context.WithValue(ctx, ctxKeySub, sub)
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 
-		// If test-mode is not explicitly enabled, reject unauthenticated requests.
 		if !enableTest {
-			w.WriteHeader(401)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		// Test-mode mapping (enabled only when ENABLE_TEST_JWT=true)
 		var roles []string
 		lower := strings.ToLower(tokenStr)
 		if strings.Contains(lower, "auditor") {
@@ -112,11 +97,112 @@ func JWT(next http.Handler) http.Handler {
 		if strings.Contains(lower, "ingest") || strings.Contains(lower, "ingester") {
 			roles = append(roles, "ingester")
 		}
-		// subject is the token text in test-mode
 		ctx := context.WithValue(r.Context(), ctxKeyRoles, roles)
 		ctx = context.WithValue(ctx, ctxKeySub, tokenStr)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func parseRoles(claims jwt.MapClaims) []string {
+	var roles []string
+	rc, ok := claims["roles"]
+	if !ok {
+		return roles
+	}
+	switch v := rc.(type) {
+	case []interface{}:
+		for _, it := range v {
+			if s, ok := it.(string); ok {
+				roles = append(roles, s)
+			}
+		}
+	case []string:
+		roles = append(roles, v...)
+	case string:
+		roles = append(roles, v)
+	}
+	return roles
+}
+
+func extractBearerToken(auth string) (string, bool) {
+	auth = strings.TrimSpace(auth)
+	if auth == "" {
+		return "", false
+	}
+	parts := strings.SplitN(auth, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+		return "", false
+	}
+	tok := strings.TrimSpace(parts[1])
+	if tok == "" {
+		return "", false
+	}
+	return tok, true
+}
+
+func validateStandardClaims(claims jwt.MapClaims, issuer string, audiences []string, now time.Time, skew time.Duration) bool {
+	if !claims.VerifyExpiresAt(now.Add(-skew).Unix(), true) {
+		return false
+	}
+	if !claims.VerifyIssuedAt(now.Add(skew).Unix(), false) {
+		return false
+	}
+	if !claims.VerifyNotBefore(now.Add(skew).Unix(), false) {
+		return false
+	}
+	if issuer != "" && !claims.VerifyIssuer(issuer, true) {
+		return false
+	}
+	if len(audiences) > 0 {
+		ok := false
+		for _, aud := range audiences {
+			if claims.VerifyAudience(aud, true) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func parseCSVEnv(name string) []string {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func parseCSVEnvDefault(name string, defaults []string) []string {
+	if vals := parseCSVEnv(name); len(vals) > 0 {
+		return vals
+	}
+	return defaults
+}
+
+func parseIntEnvDefault(name string, fallback int64) int64 {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return fallback
+	}
+	if n < 0 {
+		return fallback
+	}
+	return n
 }
 
 // RolesFromContext returns roles extracted by the JWT middleware.
