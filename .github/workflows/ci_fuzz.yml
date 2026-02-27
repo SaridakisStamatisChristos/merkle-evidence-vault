@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           cd services/merkle-engine/fuzz
-          timeout 4m bash -c 'cargo +nightly fuzz run tree_append_leaf corpus/minimized -- -dict=dict.txt -jobs=1 -workers=1 -max_total_time=180 -rss_limit_mb=512 -print_final_stats=1 2>&1 | tee /tmp/fuzz.log' || true
+          timeout 4m bash -c 'cargo +nightly fuzz run tree_append_leaf ../../../fuzz/corpus/minimized -- -dict=../../../fuzz/dict.txt -jobs=1 -workers=1 -max_total_time=180 -rss_limit_mb=512 -print_final_stats=1 2>&1 | tee /tmp/fuzz.log' || true
           for f in fuzz-*.log; do
             [ -f "$f" ] || continue
             echo "--- $f ---" | tee -a /tmp/fuzz.log
@@ -66,5 +66,5 @@ jobs:
           path: |
             /tmp/fuzz.log
             services/merkle-engine/fuzz/fuzz-*.log
-            services/merkle-engine/fuzz/corpus/minimized/**
+            fuzz/corpus/minimized/**
             services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
