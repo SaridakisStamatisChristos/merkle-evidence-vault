@@ -63,6 +63,43 @@ docker compose -f $composeFile up --build -d postgres redis zookeeper kafka merk
 
 Write-Host "Waiting 15s for dependency services to start..."
 Start-Sleep -Seconds 15
+Write-Host "Waiting for Postgres container to become healthy (via docker inspect or TCP)..."
+$pgHealthy = $false
+$pgAttempts = 60
+$pgCont = ""
+try {
+    $pgCont = (docker compose -f $composeFile ps -q postgres) -join ''
+} catch {}
+if ($pgCont -ne "") {
+    for ($k = 0; $k -lt $pgAttempts; $k++) {
+        try {
+            $status = docker inspect --format='{{.State.Health.Status}}' $pgCont 2>$null
+            if ($status -eq "healthy") { $pgHealthy = $true; break }
+        } catch {}
+        Start-Sleep -Seconds 2
+    }
+}
+if (-not $pgHealthy) {
+    Write-Host "Container health check didn't report healthy; attempting direct TCP connect to localhost:5432"
+    for ($k = 0; $k -lt 30; $k++) {
+        try {
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            $tcp.Connect('127.0.0.1', 5432)
+            $tcp.Close()
+            $pgHealthy = $true
+            break
+        } catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+if (-not $pgHealthy) {
+    Write-Host "ERROR: Postgres did not become available within timeout; dumping postgres logs for debugging"
+    if (Test-Path "/tmp/vault-api.log") { Get-Content "/tmp/vault-api.log" }
+    try { docker compose -f $composeFile logs postgres | Select-Object -First 200 } catch {}
+    exit 1
+}
+Write-Host "Postgres is available"
 # If JWKS is required (test-mode disabled and JWKS_URL is set), wait for it to become available
 if (-not $enableBool -and $env:JWKS_URL) {
     Write-Host "Waiting for JWKS at $env:JWKS_URL"
@@ -94,15 +131,49 @@ if ($ApiUrl -match "://[^:]+:(\d+)") {
 }
 Write-Host "Effective HTTP_ADDR=$env:HTTP_ADDR"
 # other envs (ENABLE_TEST_JWT, JWKS_URL) already set above
-pushd services/vault-api/cmd/server
-nohup go run . > /tmp/vault-api.log 2>&1 &
-popd
+# determine platform-appropriate log path
+$logPath = "/tmp/vault-api.log"
+if ($IsWindows) { $logPath = Join-Path $env:TEMP "vault-api.log" }
+Write-Host "vault-api log path: $logPath"
+
+# Resolve server directory relative to this script so we don't rely on cwd
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$serverRel = Join-Path $scriptRoot "..\services\vault-api\cmd\server"
+$serverDir = Resolve-Path $serverRel -ErrorAction SilentlyContinue
+if (-not $serverDir) {
+    Write-Host "ERROR: vault-api server directory not found at $serverRel"
+    Write-Host "PWD: $(Get-Location)"
+    exit 1
+}
+
+if ($IsWindows) {
+    Write-Host "Starting vault-api via Start-Job (Windows) in $($serverDir.Path)"
+    Start-Job -ScriptBlock {
+        param($d,$l)
+        Set-Location $d
+        & go run . *> $l 2>&1
+    } -ArgumentList $serverDir.Path,$logPath | Out-Null
+} else {
+    Write-Host "Starting vault-api (Unix) in $($serverDir.Path)"
+    # Use bash -lc to start the server in background; this is more reliable in CI runners
+    bash -lc "cd '$($serverDir.Path)' && nohup go run . > '$logPath' 2>&1 &"
+
+    # short wait and basic diagnostics if log not created
+    Start-Sleep -Seconds 2
+    if (-not (Test-Path $logPath)) {
+        Write-Host "vault-api log not found at $logPath; dumping process list and /tmp contents for debugging"
+        bash -lc "ps aux | grep '[v]ault-api' || true"
+        bash -lc "ls -l /tmp | grep vault-api || true"
+    }
+}
 
 # short pause then show initial log entries for debugging
 Start-Sleep -Seconds 2
-if (Test-Path "/tmp/vault-api.log") {
+if (Test-Path $logPath) {
     Write-Host "=== vault-api initial log ==="
-    Get-Content "/tmp/vault-api.log" | Select-Object -First 20
+    Get-Content $logPath | Select-Object -First 20
+} else {
+    Write-Host "vault-api log not found at $logPath"
 }
 
 # Wait for vault-api to become healthy before running tests
@@ -123,12 +194,12 @@ try {
     $check = Invoke-WebRequest -Uri ($ApiUrl + "/healthz") -UseBasicParsing -TimeoutSec 2
     if ($check.StatusCode -ne 200) {
         Write-Host "ERROR: vault-api did not become healthy; dumping /tmp/vault-api.log"
-        if (Test-Path "/tmp/vault-api.log") { Get-Content "/tmp/vault-api.log" }
+        if (Test-Path $logPath) { Get-Content $logPath }
         exit 1
     }
 } catch {
     Write-Host "ERROR: vault-api did not become healthy; dumping /tmp/vault-api.log"
-    if (Test-Path "/tmp/vault-api.log") { Get-Content "/tmp/vault-api.log" }
+    if (Test-Path $logPath) { Get-Content $logPath }
     exit 1
 }
 
