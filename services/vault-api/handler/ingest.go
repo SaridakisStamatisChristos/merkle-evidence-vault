@@ -1,14 +1,16 @@
 package handler
 
 import (
+	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"github.com/SaridakisStamatisChristos/vault-api/middleware"
 	"github.com/SaridakisStamatisChristos/vault-api/store"
@@ -30,13 +32,27 @@ type auditEntry struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+type checkpointPayload struct {
+	TreeSize int64  `json:"tree_size"`
+	RootHash string `json:"root_hash"`
+}
+
+type checkpointResponse struct {
+	TreeSize  int64  `json:"tree_size"`
+	RootHash  string `json:"root_hash"`
+	Signature string `json:"signature"`
+	KeyRef    string `json:"key_ref,omitempty"`
+}
+
 var (
 	mu sync.Mutex
 	// keep old globals for memory fallback compatibility; store package
 	// will be used when initialized.
-	storeMap       = map[string]*evidenceRecord{}
-	next     int64 = 0
-	audits         = []auditEntry{}
+	storeMap                = map[string]*evidenceRecord{}
+	next              int64 = 0
+	audits                  = []auditEntry{}
+	checkpointHistory       = map[int64]checkpointResponse{}
+	checkpointOrder         = []int64{}
 )
 
 func (h *IngestHandler) Ingest(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +76,6 @@ func (h *IngestHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	audits = append(audits, auditEntry{ID: id, Actor: actor, Timestamp: time.Now()})
 	mu.Unlock()
 
-	// persist to store if initialized
 	if s := store.Current(); s != nil {
 		_ = s.SaveEvidence(r.Context(), id)
 		_ = s.SaveAudit(r.Context(), store.AuditEntry{ID: "", ResourceID: id, Actor: actor, Timestamp: time.Now()})
@@ -69,10 +84,9 @@ func (h *IngestHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]interface{}{"id": id, "content_hash": "", "status": "pending"}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// GetAudit returns recorded audit entries. Only accessible to auditors.
 func (h *IngestHandler) GetAudit(w http.ResponseWriter, r *http.Request) {
 	roles := middleware.RolesFromContext(r.Context())
 	allowed := false
@@ -88,43 +102,90 @@ func (h *IngestHandler) GetAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	// Convert internal audit records to the expected test shape.
 	var entries []map[string]interface{}
 	for _, a := range audits {
 		entries = append(entries, map[string]interface{}{"action": "ingest", "resource_id": a.ID})
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"entries": entries})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"entries": entries})
 }
 
-// GetCheckpointsLatest returns a minimal latest checkpoint structure.
-// Accessible to any authenticated caller; if token doesn't match known E2E tokens,
-// return 403.
 func (h *IngestHandler) GetCheckpointsLatest(w http.ResponseWriter, r *http.Request) {
-	roles := middleware.RolesFromContext(r.Context())
-	allowed := false
-	for _, rr := range roles {
-		if rr == "auditor" || rr == "ingester" {
-			allowed = true
-			break
-		}
+	cp, status := buildLatestCheckpoint(r.Context())
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+		return
 	}
-	if !allowed {
-		w.WriteHeader(403)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(cp)
+}
+
+// GetCheckpointsHistory returns known checkpoints (latest first).
+func (h *IngestHandler) GetCheckpointsHistory(w http.ResponseWriter, r *http.Request) {
+	if !hasCheckpointAccess(r.Context()) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	_, _ = buildLatestCheckpoint(r.Context())
+
+	mu.Lock()
+	defer mu.Unlock()
+	entries := make([]checkpointResponse, 0, len(checkpointOrder))
+	for i := len(checkpointOrder) - 1; i >= 0; i-- {
+		ts := checkpointOrder[i]
+		entries = append(entries, checkpointHistory[ts])
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"entries": entries})
+}
+
+// VerifyLatestCheckpoint verifies the latest checkpoint signature against
+// CHECKPOINT_VERIFY_PUBLIC_KEY_B64 and returns a verification verdict.
+func (h *IngestHandler) VerifyLatestCheckpoint(w http.ResponseWriter, r *http.Request) {
+	cp, status := buildLatestCheckpoint(r.Context())
+	if status != http.StatusOK {
+		w.WriteHeader(status)
+		return
+	}
+	verifyCheckpointResponse(w, *cp)
+}
+
+// VerifyCheckpointByTreeSize verifies a specific checkpoint by tree size.
+func (h *IngestHandler) VerifyCheckpointByTreeSize(w http.ResponseWriter, r *http.Request) {
+	if !hasCheckpointAccess(r.Context()) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	prefix := "/api/v1/checkpoints/"
+	path := r.URL.Path
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, "/verify") {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	part := strings.TrimSuffix(strings.TrimPrefix(path, prefix), "/verify")
+	part = strings.Trim(part, "/")
+	treeSize, err := strconv.ParseInt(part, 10, 64)
+	if err != nil || treeSize <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	// compute latest committed leaf index and tree size
-	var maxLeaf int64 = -1
-	if s := store.Current(); s != nil {
-		// scan via DB: read max(leaf_index)
-		// Reuse AssignNextPendingLeaf logic or a direct query via store.GetEvidence is not ideal here;
-		// For simplicity use a single AssignNextPendingLeaf probe to see if any are committed,
-		// otherwise fall back to memory map scan.
-		// (Production: add a dedicated Store.MaxLeaf() method.)
-		// Fallback: scan memory if store does not expose max.
-		// Here we'll call AssignNextPendingLeaf with caution - but avoid changing DB state.
+	mu.Lock()
+	cp, ok := checkpointHistory[treeSize]
+	mu.Unlock()
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
 	}
+	verifyCheckpointResponse(w, cp)
+}
+
+func buildLatestCheckpoint(ctx context.Context) (*checkpointResponse, int) {
+	if !hasCheckpointAccess(ctx) {
+		return nil, http.StatusForbidden
+	}
+
+	var maxLeaf int64 = -1
 	mu.Lock()
 	for _, rec := range storeMap {
 		if rec.LeafIndex != nil && *rec.LeafIndex > maxLeaf {
@@ -138,40 +199,98 @@ func (h *IngestHandler) GetCheckpointsLatest(w http.ResponseWriter, r *http.Requ
 		treeSize = maxLeaf + 1
 	}
 	if treeSize == 0 {
-		// No STH/emitted checkpoint yet
-		w.WriteHeader(404)
-		return
+		return nil, http.StatusNotFound
 	}
-	root := strings.Repeat("0", 64)
-	// Default signature (test/dev fallback)
-	signature := strings.Repeat("a", 64)
 
-	// If a signing service is configured, POST the checkpoint payload for signing.
+	mu.Lock()
+	if cp, exists := checkpointHistory[treeSize]; exists {
+		mu.Unlock()
+		return &cp, http.StatusOK
+	}
+	mu.Unlock()
+
+	root := strings.Repeat("0", 64)
+	payload := checkpointPayload{TreeSize: treeSize, RootHash: root}
+	payloadBytes, _ := json.Marshal(payload)
+	signature := strings.Repeat("a", 64)
+	keyRef := "local:dev-default"
+
 	if svc := os.Getenv("CHECKPOINT_SIGNING_URL"); svc != "" {
-		payload := map[string]interface{}{"tree_size": treeSize, "root_hash": root}
-		b, _ := json.Marshal(payload)
 		client := &http.Client{Timeout: 3 * time.Second}
-		resp, err := client.Post(svc, "application/json", strings.NewReader(string(b)))
+		resp, err := client.Post(svc, "application/json", strings.NewReader(string(payloadBytes)))
 		if err == nil {
 			defer resp.Body.Close()
-			if resp.StatusCode == 200 {
+			if resp.StatusCode == http.StatusOK {
 				var got map[string]string
 				if err := json.NewDecoder(resp.Body).Decode(&got); err == nil {
 					if s, ok := got["signature"]; ok && s != "" {
 						signature = s
+					}
+					if kr, ok := got["key_ref"]; ok && kr != "" {
+						keyRef = kr
 					}
 				}
 			}
 		}
 	}
 
+	cp := checkpointResponse{TreeSize: treeSize, RootHash: root, Signature: signature, KeyRef: keyRef}
+	mu.Lock()
+	if _, exists := checkpointHistory[treeSize]; !exists {
+		checkpointOrder = append(checkpointOrder, treeSize)
+	}
+	checkpointHistory[treeSize] = cp
+	mu.Unlock()
+	return &cp, http.StatusOK
+}
+
+func hasCheckpointAccess(ctx context.Context) bool {
+	roles := middleware.RolesFromContext(ctx)
+	for _, rr := range roles {
+		if rr == "auditor" || rr == "ingester" {
+			return true
+		}
+	}
+	return false
+}
+
+func verifyCheckpointResponse(w http.ResponseWriter, cp checkpointResponse) {
+	pubB64 := strings.TrimSpace(os.Getenv("CHECKPOINT_VERIFY_PUBLIC_KEY_B64"))
+	if pubB64 == "" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"verified": false, "reason": "missing CHECKPOINT_VERIFY_PUBLIC_KEY_B64"})
+		return
+	}
+	pubRaw, err := base64.StdEncoding.DecodeString(pubB64)
+	if err != nil || len(pubRaw) != ed25519.PublicKeySize {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"verified": false, "reason": "invalid CHECKPOINT_VERIFY_PUBLIC_KEY_B64"})
+		return
+	}
+	payload, err := json.Marshal(checkpointPayload{TreeSize: cp.TreeSize, RootHash: cp.RootHash})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	sig, err := base64.StdEncoding.DecodeString(cp.Signature)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"verified": false, "reason": "checkpoint signature is not base64", "tree_size": cp.TreeSize, "root_hash": cp.RootHash, "key_ref": cp.KeyRef})
+		return
+	}
+	verified := ed25519.Verify(ed25519.PublicKey(pubRaw), payload, sig)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"tree_size": treeSize, "root_hash": root, "signature": signature})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"verified":  verified,
+		"tree_size": cp.TreeSize,
+		"root_hash": cp.RootHash,
+		"signature": cp.Signature,
+		"key_ref":   cp.KeyRef,
+	})
 }
 
 func (h *IngestHandler) GetEvidence(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Path[len("/api/v1/evidence/"):]
-	// prefer store-backed evidence
 	if s := store.Current(); s != nil {
 		ev, err := s.GetEvidence(r.Context(), id)
 		if err != nil {
@@ -179,7 +298,7 @@ func (h *IngestHandler) GetEvidence(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": ev.LeafIndex})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": ev.LeafIndex})
 		return
 	}
 	mu.Lock()
@@ -190,13 +309,11 @@ func (h *IngestHandler) GetEvidence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": rec.LeafIndex})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": rec.LeafIndex})
 }
 
 func (h *IngestHandler) GetProof(w http.ResponseWriter, r *http.Request) {
-	// Minimal proof stub — return 200 with empty path if committed
 	id := r.URL.Path[len("/api/v1/evidence/"):]
-	// strip trailing /proof
 	if len(id) > 6 && id[len(id)-6:] == "/proof" {
 		id = id[:len(id)-6]
 	}
@@ -209,19 +326,15 @@ func (h *IngestHandler) GetProof(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	root := strings.Repeat("0", 64)
-	json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": *rec.LeafIndex, "tree_size": *rec.LeafIndex + 1, "root": root, "path": []string{}})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": *rec.LeafIndex, "tree_size": *rec.LeafIndex + 1, "root": root, "path": []string{}})
 }
 
-// StartCommitter launches a background goroutine that marks pending records as
-// committed by assigning a monotonically increasing leaf index every `period`.
 func StartCommitter(period time.Duration) {
 	go func() {
 		for {
 			time.Sleep(period)
-			// prefer store-backed committer
 			if s := store.Current(); s != nil {
 				if ev, err := s.AssignNextPendingLeaf(context.Background()); err == nil && ev != nil {
-					// also update memory fallback for test visibility
 					mu.Lock()
 					if m, ok := storeMap[ev.ID]; ok {
 						m.LeafIndex = ev.LeafIndex

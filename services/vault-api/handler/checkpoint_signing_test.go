@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,8 +24,7 @@ func TestCheckpointSigningIntegration(t *testing.T) {
 
 	// signing server: returns base64 signature of request body
 	signer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(b)
+		b, _ := io.ReadAll(r.Body)
 		// sign raw body
 		sig := ed25519.Sign(priv, b)
 		enc := base64.StdEncoding.EncodeToString(sig)
@@ -67,6 +67,7 @@ func TestCheckpointSigningIntegration(t *testing.T) {
 		TreeSize  int64  `json:"tree_size"`
 		RootHash  string `json:"root_hash"`
 		Signature string `json:"signature"`
+		KeyRef    string `json:"key_ref"`
 	}
 	if err := json.NewDecoder(rw.Body).Decode(&got); err != nil {
 		t.Fatalf("decode: %v", err)
@@ -77,8 +78,7 @@ func TestCheckpointSigningIntegration(t *testing.T) {
 	}
 
 	// Verify signature matches payload
-	payload := map[string]interface{}{"tree_size": got.TreeSize, "root_hash": got.RootHash}
-	pb, _ := json.Marshal(payload)
+	pb, _ := json.Marshal(checkpointPayload{TreeSize: got.TreeSize, RootHash: got.RootHash})
 	sig, err := base64.StdEncoding.DecodeString(got.Signature)
 	if err != nil {
 		t.Fatalf("bad base64 sig: %v", err)

@@ -14,6 +14,8 @@ import (
 
 func main() {
 	r := chi.NewRouter()
+	r.Use(middleware.SecurityHeaders)
+	r.Use(middleware.Metrics)
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -23,6 +25,7 @@ func main() {
 		w.WriteHeader(200)
 		w.Write([]byte(`{"status":"ready"}`))
 	})
+	r.Handle("/metrics", middleware.MetricsHandler())
 
 	// API routes (minimal in-memory implementation for tests)
 	h := handler.NewIngestHandler()
@@ -34,7 +37,10 @@ func main() {
 
 		// audit and checkpoint endpoints (JWT middleware)
 		r.With(middleware.JWT).Get("/audit", h.GetAudit)
+		r.With(middleware.JWT).Get("/checkpoints", h.GetCheckpointsHistory)
 		r.With(middleware.JWT).Get("/checkpoints/latest", h.GetCheckpointsLatest)
+		r.With(middleware.JWT).Get("/checkpoints/latest/verify", h.VerifyLatestCheckpoint)
+		r.With(middleware.JWT).Get("/checkpoints/{treeSize}/verify", h.VerifyCheckpointByTreeSize)
 	})
 
 	addr := os.Getenv("HTTP_ADDR")

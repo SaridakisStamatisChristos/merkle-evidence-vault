@@ -1,0 +1,22 @@
+backend:
+  - changed-files:
+      - any-glob-to-any-file: 'services/**'
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file: 'frontend/**'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: '.github/workflows/**'
+      - any-glob-to-any-file: 'scripts/**'
+
+security:
+  - changed-files:
+      - any-glob-to-any-file: 'security/**'
+      - any-glob-to-any-file: 'services/**/middleware/**'
+
+infra:
+  - changed-files:
+      - any-glob-to-any-file: 'ops/**'
+      - any-glob-to-any-file: 'observability/**'

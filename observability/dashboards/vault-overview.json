@@ -1,7 +1,42 @@
 {
   "title": "Vault Overview",
   "panels": [
-    { "type": "stat", "title": "Tree Size", "targets": [] },
-    { "type": "stat", "title": "Latest STH Age", "targets": [] }
+    {
+      "type": "timeseries",
+      "title": "Vault API Request Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(vault_api_http_requests_total[5m])) by (status)",
+          "legendFormat": "status {{status}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Vault API P95 Latency",
+      "targets": [
+        {
+          "expr": "vault_api_http_request_duration_seconds_avg"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Checkpoint Signing Errors",
+      "targets": [
+        {
+          "expr": "increase(checkpoint_svc_sign_failures_total[15m])"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Merkle Engine Uptime (s)",
+      "targets": [
+        {
+          "expr": "merkle_engine_uptime_seconds"
+        }
+      ]
+    }
   ]
 }

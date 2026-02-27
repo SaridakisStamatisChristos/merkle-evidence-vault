@@ -4,16 +4,20 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"os"
 )
 
 // Signer represents a service capable of signing bytes and returning the signature.
 type Signer interface {
 	Sign([]byte) ([]byte, error)
+	KeyRef() string
 }
 
 // LocalSigner uses an exported ed25519 private key (in memory) to sign payloads.
 type LocalSigner struct {
-	priv ed25519.PrivateKey
+	priv   ed25519.PrivateKey
+	keyRef string
 }
 
 func NewLocalSignerFromBase64(b64 string) (*LocalSigner, error) {
@@ -24,7 +28,18 @@ func NewLocalSignerFromBase64(b64 string) (*LocalSigner, error) {
 	if len(dec) != ed25519.PrivateKeySize {
 		return nil, errors.New("invalid private key size")
 	}
-	return &LocalSigner{priv: ed25519.PrivateKey(dec)}, nil
+	return &LocalSigner{priv: ed25519.PrivateKey(dec), keyRef: "local:file-or-env"}, nil
+}
+
+func NewLocalSignerFromBase64WithRef(b64, ref string) (*LocalSigner, error) {
+	s, err := NewLocalSignerFromBase64(b64)
+	if err != nil {
+		return nil, err
+	}
+	if ref != "" {
+		s.keyRef = ref
+	}
+	return s, nil
 }
 
 func (s *LocalSigner) Sign(b []byte) ([]byte, error) {
@@ -32,22 +47,43 @@ func (s *LocalSigner) Sign(b []byte) ([]byte, error) {
 	return sig, nil
 }
 
-// KMSSigner is a placeholder for KMS-backed signing implementations.
-// Production implementations should implement this type to call provider-specific
-// Sign APIs (AWS KMS, Azure Key Vault, Google Cloud KMS) which typically do
-// not expose the private key material but provide signing RPCs.
-// For now KMSSigner is a stub that returns an informative error.
+func (s *LocalSigner) KeyRef() string {
+	return s.keyRef
+}
+
+// KMSSigner abstracts provider-backed signing implementations.
 type KMSSigner struct {
 	Provider string
 	KeyID    string
+	signer   Signer
 }
 
 func NewKMSSigner(provider, keyid string) (*KMSSigner, error) {
-	// TODO: implement provider-specific clients and return a KMSSigner that
-	// performs remote Sign operations. Keep the interface minimal (Sign).
-	return &KMSSigner{Provider: provider, KeyID: keyid}, nil
+	var impl Signer
+	switch provider {
+	case "local-hsm-emulator":
+		b64 := os.Getenv("KMS_PRIVATE_KEY_B64")
+		if b64 == "" {
+			return nil, errors.New("KMS_PRIVATE_KEY_B64 is required for local-hsm-emulator")
+		}
+		s, err := NewLocalSignerFromBase64WithRef(b64, fmt.Sprintf("%s:%s", provider, keyid))
+		if err != nil {
+			return nil, err
+		}
+		impl = s
+	default:
+		return nil, fmt.Errorf("unsupported KMS_PROVIDER %q", provider)
+	}
+	return &KMSSigner{Provider: provider, KeyID: keyid, signer: impl}, nil
 }
 
 func (k *KMSSigner) Sign(b []byte) ([]byte, error) {
-	return nil, errors.New("KMSSigner not implemented: configure provider-specific implementation (AWS KMS / Azure Key Vault / GCP KMS)")
+	if k.signer == nil {
+		return nil, errors.New("kms signer backend not initialized")
+	}
+	return k.signer.Sign(b)
+}
+
+func (k *KMSSigner) KeyRef() string {
+	return fmt.Sprintf("%s:%s", k.Provider, k.KeyID)
 }

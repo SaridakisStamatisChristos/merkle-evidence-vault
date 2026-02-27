@@ -1,6 +1,18 @@
 global:
   scrape_interval: 15s
+
 scrape_configs:
   - job_name: 'vault-api'
     static_configs:
-      - targets: ['vault-api:9090']
+      - targets: ['vault-api:8443']
+    metrics_path: /metrics
+
+  - job_name: 'checkpoint-svc'
+    static_configs:
+      - targets: ['checkpoint-svc:8081']
+    metrics_path: /metrics
+
+  - job_name: 'merkle-engine'
+    static_configs:
+      - targets: ['merkle-engine:8000']
+    metrics_path: /metrics

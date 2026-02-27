@@ -1,14 +1,13 @@
-<!-- Describe the change and why it is needed -->
 ### Summary
 
-<!-- Short description of the change -->
-
+<!-- Describe what changed and why in release-note style. -->
 
 ### Checklist
 - [ ] Code builds and tests pass locally
 - [ ] Relevant integration/e2e tests added or updated
 - [ ] Documentation (README/NEXT_STEPS) updated if needed
-- [ ] Change has been squashed into logical commits
+- [ ] Labels applied (`backend`/`frontend`/`ci`/`infra`/`security` + change-type)
+- [ ] Requested reviewers from CODEOWNERS and impacted areas
 
 ### Suggested labels
 - `enhancement` - new feature
@@ -17,8 +16,5 @@
 - `infra` - deployment/ops
 - `security` - security-sensitive changes
 
-### Request reviewers
-Please assign reviewers from the CODEOWNERS or maintainers team. If you need specific reviewers, mention them here (e.g. @SaridakisStamatisChristos).
-
 ### Test Notes
-Provide brief instructions to reproduce the test run or important caveats (PowerShell on Windows, env vars, etc.).
+Provide brief reproduction instructions and list exact commands you ran.

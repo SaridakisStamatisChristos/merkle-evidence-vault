@@ -46,6 +46,8 @@ services:
       context: ../../
       dockerfile: ops/docker/Dockerfile.merkle-engine
     depends_on: [postgres]
+    ports:
+      - "8000:8000"
     healthcheck:
       test: ["CMD", "/bin/sh", "-c", "curl -sf http://localhost:8000/healthz || exit 1"]
       interval: 15s
@@ -84,3 +86,5 @@ services:
       context: ../../
       dockerfile: services/checkpoint-svc/Dockerfile
     depends_on: [merkle-engine]
+    ports:
+      - "8081:8081"
