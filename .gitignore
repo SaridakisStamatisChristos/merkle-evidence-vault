@@ -4,13 +4,10 @@
 /scripts/ci_*.token
 /scripts/ci_jwks_env.txt
 
-# Editor and OS files
+# Editor files
 *.swp
 *.swo
 *.bak
-*.tmp
-Thumbs.db
-.DS_Store
 
 # Rust
 **/target/
