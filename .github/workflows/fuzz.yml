@@ -112,36 +112,33 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo +nightly install cargo-fuzz || true
 
-      - name: Run scheduled fuzz (10m)
-        env:
-          CC: clang
-          CXX: clang++
-          RUSTFLAGS: "-Z sanitizer=address -C prefer-dynamic"
-          RUSTDOCFLAGS: "-Z sanitizer=address"
-          ASAN_OPTIONS: "verbosity=2:detect_leaks=1:log_path=/tmp/asan.log:abort_on_error=1:allow_user_segv_handler=1:malloc_context_size=30"
-          LSAN_OPTIONS: "verbosity=1:log_threads=1:log_path=/tmp/lsan.log"
+      - name: Run cargo fuzz with ASan
         run: |
-          set -o pipefail
-          ASAN_LIB=$(gcc -print-file-name=libasan.so 2>/dev/null || true)
-          if [ -n "$ASAN_LIB" ] && [ -f "$ASAN_LIB" ]; then
-            export LD_PRELOAD="$ASAN_LIB"
-            echo "Preloading libasan: $ASAN_LIB"
-          else
-            echo "libasan not found via gcc; proceeding without LD_PRELOAD"
-          fi
-          ulimit -c unlimited || true
-          cd services/merkle-engine
-          echo "ASAN_LIB=$ASAN_LIB"
-          ls -l "$ASAN_LIB" || true
-          file "$ASAN_LIB" || true
-          ldd "$ASAN_LIB" || true
-          echo "Test LD_PRELOAD with /bin/true (10s timeout)"
-          timeout 10s bash -c 'LD_PRELOAD="'$ASAN_LIB'" /bin/true' || echo "Preload test failed or timed out"
-          echo "Starting strace of cargo fuzz (output /tmp/strace.cargo*)"
-          strace -ff -o /tmp/strace.cargo -s 200 cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=600 -workers=1 -rss_limit_mb=1024 2>&1 | tee /tmp/fuzz.log || true
-          for f in /tmp/strace.cargo*; do echo "--- $f ---"; tail -n 200 "$f" || true; done
-          if [ -f /tmp/asan.log ]; then echo "--- /tmp/asan.log ---"; sed -n '1,200p' /tmp/asan.log; fi
-          if [ -f /tmp/lsan.log ]; then echo "--- /tmp/lsan.log ---"; sed -n '1,200p' /tmp/lsan.log; fi
+          # Set a timeout to prevent indefinite hangs
+          timeout 10m bash -c "cargo fuzz run tree_append_leaf"
+        env:
+          RUSTFLAGS: "-Zsanitizer=address"
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1"
+
+      - name: Capture system state on hang
+        if: failure()
+        run: |
+          echo "Capturing system state due to hang..."
+          ps aux > /tmp/process_list.txt
+          dmesg > /tmp/dmesg.log
+          lsof > /tmp/open_files.log
+
+      - name: Upload debugging artifacts
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: debug-logs
+          path: |
+            /tmp/process_list.txt
+            /tmp/dmesg.log
+            /tmp/open_files.log
+            /tmp/strace.cargo*
+            /tmp/sanitizer.log
 
       - name: Check ASAN/LSAN output for leaks (scheduled)
         if: always()
