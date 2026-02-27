@@ -47,7 +47,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-artifacts-short
-          path: services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
+          path: |
+            services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
+            fuzz/corpus/minimized/**
 
   # Scheduled longer fuzz runs to increase coverage and collect crashes
   fuzz-scheduled:
@@ -87,4 +89,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-artifacts-scheduled
-          path: services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
+          path: |
+            services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
+            fuzz/corpus/minimized/**
