@@ -25,7 +25,7 @@ This document tracks prioritized tasks moving the project from development/test-
 
 ### Priority 1 — Safety & auth (0–2 weeks)
 - [x] JWKS middleware implemented and CI stabilized with JWKS stub.
-- [ ] Final production JWT/JWKS hardening pass (rotation behavior, failure modes, cache policy, threat-model review).
+- [x] Final production JWT/JWKS hardening pass implemented for strict bearer parsing, claim validation (iss/aud/exp/nbf/iat), and configurable alg/skew policy. Threat-model review remains ongoing.
 
 ### Priority 2 — Integrity hardening (1–3 weeks)
 - [x] Fuzzing baseline complete; scheduled runs enabled; artifact-minimization pipeline + retention policy implemented.
