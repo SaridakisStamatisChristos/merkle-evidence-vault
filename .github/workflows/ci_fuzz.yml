@@ -1,0 +1,30 @@
+name: Fuzz (bounded - committed corpus)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  fuzz-bounded:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      - name: Bounded fuzz run (short)
+        run: |
+          cd services/merkle-engine || exit 1
+          mkdir -p ../../fuzz/work || true
+          timeout 30s cargo fuzz run tree_append_leaf ../../fuzz/corpus/minimized -dict=../../fuzz/dict.txt -jobs=1 -workers=1 || true
+      - name: Upload fuzz artifacts (committed corpus)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus
+          path: fuzz/corpus/minimized/**

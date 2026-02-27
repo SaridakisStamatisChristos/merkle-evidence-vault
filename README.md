@@ -33,3 +33,24 @@ Notes:
 - The server in the Docker compose listens on HTTP at host port `8080` (container port `8443`), so use an `http://` URL for `E2E_API_URL` unless you enable HTTPS in the server.
 - Set the variables directly in PowerShell (use `$env:...`) so `make` / `go test` inherit them — do not wrap everything in a single quoted string passed to a subshell.
 - If you prefer a helper, there's a PowerShell helper script at `scripts/run-integration.ps1` (see repository).
+
+## Fuzzing & Hardening
+
+- ASAN fuzzing: 71,232,156 executions in 601s (~118.5k exec/s), ASAN-enabled, no crashes.  
+- Final peak RSS: ~471 MB (ASAN overhead observed, no sustained leak growth).  
+- Minimized corpus & recommended dictionary committed (`fuzz/corpus/minimized`, `fuzz/dict.txt`) to allow reproducible regression replay.  
+- Replayable artifacts and run metadata are stored at `fuzz/last_run_meta.md`.  
+
+To run a short bounded fuzz locally using the committed corpus:
+
+```bash
+cd services/merkle-engine
+cargo fuzz run tree_append_leaf ../../fuzz/corpus/minimized -dict=../../fuzz/dict.txt -jobs=1 -workers=1
+```
+
+To replay the minimized corpus deterministically:
+
+```bash
+./fuzz/replay_minimized.sh
+```
+
