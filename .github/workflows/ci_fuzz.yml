@@ -1,5 +1,4 @@
 name: Fuzz (bounded - committed corpus)
-
 on:
   push:
     branches:
@@ -13,28 +12,23 @@ on:
     paths:
       - '.github/workflows/ci_fuzz.yml'
       - 'services/merkle-engine/**'
-
 jobs:
   fuzz-bounded:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Rust (nightly)
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
-
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y clang lld
-
       - name: Install cargo-fuzz
         run: cargo +nightly install cargo-fuzz --locked || true
-
       - name: Bounded fuzz run (committed corpus)
         env:
           RUSTFLAGS: "-Z sanitizer=address"
@@ -42,15 +36,12 @@ jobs:
         run: |
           set -euo pipefail
           cd services/merkle-engine/fuzz
-
-          timeout 4m bash -c 'cargo +nightly fuzz run tree_append_leaf corpus/minimized -dict=dict.txt -jobs=1 -workers=1 -- -max_total_time=180 -rss_limit_mb=512 -print_final_stats=1 2>&1 | tee /tmp/fuzz.log' || true
-
+          timeout 4m bash -c 'cargo +nightly fuzz run tree_append_leaf corpus/minimized -- -dict=dict.txt -jobs=1 -workers=1 -max_total_time=180 -rss_limit_mb=512 -print_final_stats=1 2>&1 | tee /tmp/fuzz.log' || true
           for f in fuzz-*.log; do
             [ -f "$f" ] || continue
             echo "--- $f ---" | tee -a /tmp/fuzz.log
             tail -n 200 "$f" | tee -a /tmp/fuzz.log || true
           done
-
       - name: Check ASAN/LSAN and progress
         if: always()
         run: |
@@ -60,14 +51,13 @@ jobs:
             cat /tmp/fuzz.log
             exit 1
           fi
-          if grep -Eq "#.*(pulse|NEW|REDUCE)|stat::number_of_executed_units" /tmp/fuzz.log; then
+          if grep -Eq "#.*(pulse|NEW|REDUCE)|stat::number_of_executed_units|INFO: Loaded [0-9]+ modules|INFO: seed corpus" /tmp/fuzz.log; then
             echo "Bounded fuzz produced progress output"
           else
             echo "Bounded fuzz did not produce progress output"
             tail -n 200 /tmp/fuzz.log || true
             exit 1
           fi
-
       - name: Upload fuzz artifacts (committed corpus)
         if: always()
         uses: actions/upload-artifact@v4
