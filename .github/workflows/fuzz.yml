@@ -49,7 +49,15 @@ jobs:
           fi
           ulimit -c unlimited || true
           cd services/merkle-engine
-          cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=60 -workers=1 -rss_limit_mb=512 2>&1 | tee /tmp/fuzz.log || true
+          echo "ASAN_LIB=$ASAN_LIB"
+          ls -l "$ASAN_LIB" || true
+          file "$ASAN_LIB" || true
+          ldd "$ASAN_LIB" || true
+          echo "Test LD_PRELOAD with /bin/true (10s timeout)"
+          timeout 10s bash -c 'LD_PRELOAD="'$ASAN_LIB'" /bin/true' || echo "Preload test failed or timed out"
+          echo "Starting strace of cargo fuzz (output /tmp/strace.cargo*)"
+          strace -ff -o /tmp/strace.cargo -s 200 cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=60 -workers=1 -rss_limit_mb=512 2>&1 | tee /tmp/fuzz.log || true
+          for f in /tmp/strace.cargo*; do echo "--- $f ---"; tail -n 200 "$f" || true; done
           if [ -f /tmp/asan.log ]; then echo "--- /tmp/asan.log ---"; sed -n '1,200p' /tmp/asan.log; fi
           if [ -f /tmp/lsan.log ]; then echo "--- /tmp/lsan.log ---"; sed -n '1,200p' /tmp/lsan.log; fi
 
@@ -112,7 +120,15 @@ jobs:
           fi
           ulimit -c unlimited || true
           cd services/merkle-engine
-          cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=600 -workers=1 -rss_limit_mb=1024 2>&1 | tee /tmp/fuzz.log || true
+          echo "ASAN_LIB=$ASAN_LIB"
+          ls -l "$ASAN_LIB" || true
+          file "$ASAN_LIB" || true
+          ldd "$ASAN_LIB" || true
+          echo "Test LD_PRELOAD with /bin/true (10s timeout)"
+          timeout 10s bash -c 'LD_PRELOAD="'$ASAN_LIB'" /bin/true' || echo "Preload test failed or timed out"
+          echo "Starting strace of cargo fuzz (output /tmp/strace.cargo*)"
+          strace -ff -o /tmp/strace.cargo -s 200 cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=600 -workers=1 -rss_limit_mb=1024 2>&1 | tee /tmp/fuzz.log || true
+          for f in /tmp/strace.cargo*; do echo "--- $f ---"; tail -n 200 "$f" || true; done
           if [ -f /tmp/asan.log ]; then echo "--- /tmp/asan.log ---"; sed -n '1,200p' /tmp/asan.log; fi
           if [ -f /tmp/lsan.log ]; then echo "--- /tmp/lsan.log ---"; sed -n '1,200p' /tmp/lsan.log; fi
 
