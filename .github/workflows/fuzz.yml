@@ -17,6 +17,7 @@ on:
 
 jobs:
   fuzz-asan:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -70,9 +71,23 @@ jobs:
             done
           }
 
+          monitor_fuzz_logs() {
+            while true; do
+              if compgen -G "fuzz-*.log" >/dev/null || compgen -G "services/merkle-engine/fuzz-*.log" >/dev/null || compgen -G "services/merkle-engine/fuzz/fuzz-*.log" >/dev/null; then
+                echo "[monitor] tailing fuzz worker logs"
+                tail -n 40 fuzz-*.log services/merkle-engine/fuzz-*.log services/merkle-engine/fuzz/fuzz-*.log 2>/dev/null || true
+              else
+                echo "[monitor] waiting for fuzz-*.log"
+              fi
+              sleep 30
+            done
+          }
+
           heartbeat &
           HEARTBEAT_PID=$!
-          trap 'kill "$HEARTBEAT_PID" 2>/dev/null || true' EXIT
+          monitor_fuzz_logs &
+          MONITOR_PID=$!
+          trap 'kill "$HEARTBEAT_PID" "$MONITOR_PID" 2>/dev/null || true' EXIT
 
           ASAN_LIB=$(gcc -print-file-name=libasan.so 2>/dev/null || true)
           if [ -n "$ASAN_LIB" ] && [ -f "$ASAN_LIB" ]; then
@@ -90,7 +105,12 @@ jobs:
           echo "Test LD_PRELOAD with /bin/true (10s timeout)"
           timeout 10s bash -c 'LD_PRELOAD="'$ASAN_LIB'" /bin/true' || echo "Preload test failed or timed out"
           echo "Starting strace of cargo fuzz (output /tmp/strace.cargo*)"
-          timeout 8m strace -ff -o /tmp/strace.cargo -s 200 cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=60 -workers=1 -rss_limit_mb=512 2>&1 | tee /tmp/fuzz.log || true
+          timeout 8m strace -ff -o /tmp/strace.cargo -s 200 cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=60 -workers=1 -jobs=1 -rss_limit_mb=512 2>&1 | tee /tmp/fuzz.log || true
+          for f in fuzz-*.log fuzz/fuzz-*.log; do
+            [ -f "$f" ] || continue
+            echo "--- $f ---" | tee -a /tmp/fuzz.log
+            tail -n 200 "$f" | tee -a /tmp/fuzz.log || true
+          done
           for f in /tmp/strace.cargo*; do echo "--- $f ---"; tail -n 200 "$f" || true; done
           if [ -f /tmp/asan.log ]; then echo "--- /tmp/asan.log ---"; sed -n '1,200p' /tmp/asan.log; fi
           if [ -f /tmp/lsan.log ]; then echo "--- /tmp/lsan.log ---"; sed -n '1,200p' /tmp/lsan.log; fi
@@ -125,6 +145,7 @@ jobs:
             services/merkle-engine/fuzz/corpus/minimized/**
 
   fuzz-scheduled:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -157,12 +178,32 @@ jobs:
             done
           }
 
+          monitor_fuzz_logs() {
+            while true; do
+              if compgen -G "fuzz-*.log" >/dev/null || compgen -G "services/merkle-engine/fuzz-*.log" >/dev/null || compgen -G "services/merkle-engine/fuzz/fuzz-*.log" >/dev/null; then
+                echo "[monitor] tailing fuzz worker logs"
+                tail -n 40 fuzz-*.log services/merkle-engine/fuzz-*.log services/merkle-engine/fuzz/fuzz-*.log 2>/dev/null || true
+              else
+                echo "[monitor] waiting for fuzz-*.log"
+              fi
+              sleep 30
+            done
+          }
+
           heartbeat &
           HEARTBEAT_PID=$!
-          trap 'kill "$HEARTBEAT_PID" 2>/dev/null || true' EXIT
+          monitor_fuzz_logs &
+          MONITOR_PID=$!
+          trap 'kill "$HEARTBEAT_PID" "$MONITOR_PID" 2>/dev/null || true' EXIT
 
           cd services/merkle-engine/fuzz
           timeout 15m bash -c "cargo fuzz run tree_append_leaf -- -max_total_time=540 -workers=1 -jobs=1 -rss_limit_mb=512 -print_final_stats=1 2>&1 | tee /tmp/fuzz.log" || true
+          if ls fuzz-*.log >/dev/null 2>&1; then
+            for f in fuzz-*.log; do
+              echo "--- $f ---" | tee -a /tmp/fuzz.log
+              tail -n 400 "$f" | tee -a /tmp/fuzz.log || true
+            done
+          fi
         env:
           RUSTFLAGS: "-Zsanitizer=address"
           ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:log_path=/tmp/asan.log"
