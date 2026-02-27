@@ -4,7 +4,7 @@
 /scripts/ci_*.token
 /scripts/ci_jwks_env.txt
 
-# Editor files
+# Editor artifacts
 *.swp
 *.swo
 *.bak
