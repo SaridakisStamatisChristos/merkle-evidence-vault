@@ -1,4 +1,4 @@
-append
-proof
-leaf
-checkpoint
+kw_append="append"
+kw_proof="proof"
+kw_leaf="leaf"
+kw_checkpoint="checkpoint"
