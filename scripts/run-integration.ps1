@@ -63,6 +63,43 @@ docker compose -f $composeFile up --build -d postgres redis zookeeper kafka merk
 
 Write-Host "Waiting 15s for dependency services to start..."
 Start-Sleep -Seconds 15
+Write-Host "Waiting for Postgres container to become healthy (via docker inspect or TCP)..."
+$pgHealthy = $false
+$pgAttempts = 60
+$pgCont = ""
+try {
+    $pgCont = (docker compose -f $composeFile ps -q postgres) -join ''
+} catch {}
+if ($pgCont -ne "") {
+    for ($k = 0; $k -lt $pgAttempts; $k++) {
+        try {
+            $status = docker inspect --format='{{.State.Health.Status}}' $pgCont 2>$null
+            if ($status -eq "healthy") { $pgHealthy = $true; break }
+        } catch {}
+        Start-Sleep -Seconds 2
+    }
+}
+if (-not $pgHealthy) {
+    Write-Host "Container health check didn't report healthy; attempting direct TCP connect to localhost:5432"
+    for ($k = 0; $k -lt 30; $k++) {
+        try {
+            $tcp = New-Object System.Net.Sockets.TcpClient
+            $tcp.Connect('127.0.0.1', 5432)
+            $tcp.Close()
+            $pgHealthy = $true
+            break
+        } catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+if (-not $pgHealthy) {
+    Write-Host "ERROR: Postgres did not become available within timeout; dumping postgres logs for debugging"
+    if (Test-Path "/tmp/vault-api.log") { Get-Content "/tmp/vault-api.log" }
+    try { docker compose -f $composeFile logs postgres | Select-Object -First 200 } catch {}
+    exit 1
+}
+Write-Host "Postgres is available"
 # If JWKS is required (test-mode disabled and JWKS_URL is set), wait for it to become available
 if (-not $enableBool -and $env:JWKS_URL) {
     Write-Host "Waiting for JWKS at $env:JWKS_URL"
