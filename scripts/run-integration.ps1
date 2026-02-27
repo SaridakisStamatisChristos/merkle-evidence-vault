@@ -132,14 +132,25 @@ if ($ApiUrl -match "://[^:]+:(\d+)") {
 Write-Host "Effective HTTP_ADDR=$env:HTTP_ADDR"
 # other envs (ENABLE_TEST_JWT, JWKS_URL) already set above
 pushd services/vault-api/cmd/server
-nohup go run . > /tmp/vault-api.log 2>&1 &
+# determine platform-appropriate log path
+$logPath = "/tmp/vault-api.log"
+if ($IsWindows) { $logPath = Join-Path $env:TEMP "vault-api.log" }
+Write-Host "vault-api log path: $logPath"
+pushd services/vault-api/cmd/server
+if ($IsWindows) {
+    Start-Process -FilePath "go" -ArgumentList 'run', '.' -WorkingDirectory (Get-Location) -RedirectStandardOutput $logPath -RedirectStandardError $logPath -NoNewWindow
+} else {
+    nohup go run . > $logPath 2>&1 &
+}
 popd
 
 # short pause then show initial log entries for debugging
 Start-Sleep -Seconds 2
-if (Test-Path "/tmp/vault-api.log") {
+if (Test-Path $logPath) {
     Write-Host "=== vault-api initial log ==="
-    Get-Content "/tmp/vault-api.log" | Select-Object -First 20
+    Get-Content $logPath | Select-Object -First 20
+} else {
+    Write-Host "vault-api log not found at $logPath"
 }
 
 # Wait for vault-api to become healthy before running tests
@@ -160,12 +171,12 @@ try {
     $check = Invoke-WebRequest -Uri ($ApiUrl + "/healthz") -UseBasicParsing -TimeoutSec 2
     if ($check.StatusCode -ne 200) {
         Write-Host "ERROR: vault-api did not become healthy; dumping /tmp/vault-api.log"
-        if (Test-Path "/tmp/vault-api.log") { Get-Content "/tmp/vault-api.log" }
+        if (Test-Path $logPath) { Get-Content $logPath }
         exit 1
     }
 } catch {
     Write-Host "ERROR: vault-api did not become healthy; dumping /tmp/vault-api.log"
-    if (Test-Path "/tmp/vault-api.log") { Get-Content "/tmp/vault-api.log" }
+    if (Test-Path $logPath) { Get-Content $logPath }
     exit 1
 }
 
