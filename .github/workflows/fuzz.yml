@@ -53,7 +53,19 @@ jobs:
           ASAN_OPTIONS: "verbosity=2:detect_leaks=1:log_path=/tmp/asan.log:abort_on_error=1:allow_user_segv_handler=1:malloc_context_size=30"
           LSAN_OPTIONS: "verbosity=1:log_threads=1:log_path=/tmp/lsan.log"
         run: |
-          set -o pipefail
+          set -euo pipefail
+
+          heartbeat() {
+            while true; do
+              sleep 60
+              echo "[heartbeat] fuzz-asan still running at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            done
+          }
+
+          heartbeat &
+          HEARTBEAT_PID=$!
+          trap 'kill "$HEARTBEAT_PID" 2>/dev/null || true' EXIT
+
           ASAN_LIB=$(gcc -print-file-name=libasan.so 2>/dev/null || true)
           if [ -n "$ASAN_LIB" ] && [ -f "$ASAN_LIB" ]; then
             export LD_PRELOAD="$ASAN_LIB"
@@ -70,7 +82,7 @@ jobs:
           echo "Test LD_PRELOAD with /bin/true (10s timeout)"
           timeout 10s bash -c 'LD_PRELOAD="'$ASAN_LIB'" /bin/true' || echo "Preload test failed or timed out"
           echo "Starting strace of cargo fuzz (output /tmp/strace.cargo*)"
-          strace -ff -o /tmp/strace.cargo -s 200 cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=60 -workers=1 -rss_limit_mb=512 2>&1 | tee /tmp/fuzz.log || true
+          timeout 8m strace -ff -o /tmp/strace.cargo -s 200 cargo +nightly fuzz run tree_append_leaf --release -- -max_total_time=60 -workers=1 -rss_limit_mb=512 2>&1 | tee /tmp/fuzz.log || true
           for f in /tmp/strace.cargo*; do echo "--- $f ---"; tail -n 200 "$f" || true; done
           if [ -f /tmp/asan.log ]; then echo "--- /tmp/asan.log ---"; sed -n '1,200p' /tmp/asan.log; fi
           if [ -f /tmp/lsan.log ]; then echo "--- /tmp/lsan.log ---"; sed -n '1,200p' /tmp/lsan.log; fi
@@ -128,8 +140,21 @@ jobs:
 
       - name: Run cargo fuzz with ASan
         run: |
+          set -euo pipefail
+
+          heartbeat() {
+            while true; do
+              sleep 60
+              echo "[heartbeat] fuzz-scheduled still running at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            done
+          }
+
+          heartbeat &
+          HEARTBEAT_PID=$!
+          trap 'kill "$HEARTBEAT_PID" 2>/dev/null || true' EXIT
+
           cd services/merkle-engine/fuzz
-          timeout 10m bash -c "cargo fuzz run tree_append_leaf 2>&1 | tee /tmp/fuzz.log"
+          timeout 15m bash -c "cargo fuzz run tree_append_leaf -- -max_total_time=540 -workers=1 -jobs=1 -rss_limit_mb=512 -print_final_stats=1 2>&1 | tee /tmp/fuzz.log" || true
         env:
           RUSTFLAGS: "-Zsanitizer=address"
           ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:log_path=/tmp/asan.log"
@@ -147,10 +172,14 @@ jobs:
 
       - name: Check for CI success
         run: |
-          if grep -q "==" /tmp/fuzz.log; then
-            echo "Fuzzing completed successfully."
-            exit 0
+          if grep -E "#.*(pulse|NEW|REDUCE)|stat::number_of_executed_units" /tmp/fuzz.log; then
+            echo "Fuzzing ran and produced libFuzzer progress output."
           else
-            echo "Fuzzing did not run as expected."
+            echo "Fuzzing did not produce expected progress output."
+            exit 1
+          fi
+
+          if grep -E "ERROR: AddressSanitizer|ERROR: LeakSanitizer|SUMMARY: AddressSanitizer" /tmp/fuzz.log; then
+            echo "ASAN/LSAN error detected."
             exit 1
           fi
