@@ -30,6 +30,18 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo +nightly install cargo-fuzz || true
 
+      - name: Verify Cargo project
+        run: |
+          echo "Listing directory contents..."
+          ls -la
+          echo "Checking for Cargo.toml..."
+          if [ ! -f Cargo.toml ]; then
+            echo "Error: Cargo.toml not found in the current directory." >&2
+            exit 1
+          fi
+          echo "Available fuzz targets:"
+          cargo fuzz list
+
       - name: Build and run fuzz target (ASAN)
         env:
           CC: clang
@@ -114,6 +126,8 @@ jobs:
 
       - name: Run cargo fuzz with ASan
         run: |
+          # Ensure we are in the correct directory
+          cd services/merkle-engine/fuzz
           # Set a timeout to prevent indefinite hangs
           timeout 10m bash -c "cargo fuzz run tree_append_leaf"
         env:
