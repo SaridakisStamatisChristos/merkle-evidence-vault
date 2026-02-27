@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/SaridakisStamatisChristos/checkpoint-svc/metrics"
 	"github.com/SaridakisStamatisChristos/checkpoint-svc/signer"
 )
 
@@ -61,8 +62,11 @@ func main() {
 		log.Printf("warning: no signer available (%v); signing endpoint disabled", signerErr)
 	}
 
+	http.Handle("/metrics", metrics.Handler())
+
 	if signerObj != nil {
 		http.HandleFunc("/sign", func(w http.ResponseWriter, r *http.Request) {
+			metrics.IncSignRequests()
 			if r.Method != http.MethodPost {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				return
@@ -75,6 +79,7 @@ func main() {
 			sig, err := signerObj.Sign(b)
 			if err != nil {
 				log.Printf("sign error key_ref=%s err=%v", signerObj.KeyRef(), err)
+				metrics.IncSignFailures()
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

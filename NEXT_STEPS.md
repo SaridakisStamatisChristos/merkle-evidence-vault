@@ -37,11 +37,10 @@ This document tracks prioritized tasks moving the project from development/test-
 
 ### Priority 4 — CI, observability, and ops (1–2 weeks)
 - [x] Compose healthchecks/resource limits and CI hardening baseline completed.
-- [ ] Add Prometheus metrics and dashboard/alerts across `vault-api`, `merkle-engine`, and `checkpoint-svc`.
+- [x] Add Prometheus metrics and dashboard/alerts across `vault-api`, `merkle-engine`, and `checkpoint-svc`.
 
 ## Low priority / longer term
 - [~] Replace test-only checkpoint signature flow with verifiable STH endpoints in the audit trail (latest verification endpoint added; full persisted STH history still pending).
 
 ## Suggested execution order
-1. Add observability metrics + dashboards/alerts.
-2. Expand checkpoint flow from latest-only verification to persisted verifiable STH history.
+1. Expand checkpoint flow from latest-only verification to persisted verifiable STH history.
