@@ -125,7 +125,6 @@ jobs:
         run: |
           echo "Capturing system state due to hang..."
           ps aux > /tmp/process_list.txt
-          dmesg > /tmp/dmesg.log
           lsof > /tmp/open_files.log
 
       - name: Upload debugging artifacts
@@ -135,7 +134,6 @@ jobs:
           name: debug-logs
           path: |
             /tmp/process_list.txt
-            /tmp/dmesg.log
             /tmp/open_files.log
             /tmp/strace.cargo*
             /tmp/sanitizer.log
