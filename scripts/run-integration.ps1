@@ -131,18 +131,32 @@ if ($ApiUrl -match "://[^:]+:(\d+)") {
 }
 Write-Host "Effective HTTP_ADDR=$env:HTTP_ADDR"
 # other envs (ENABLE_TEST_JWT, JWKS_URL) already set above
-pushd services/vault-api/cmd/server
 # determine platform-appropriate log path
 $logPath = "/tmp/vault-api.log"
 if ($IsWindows) { $logPath = Join-Path $env:TEMP "vault-api.log" }
 Write-Host "vault-api log path: $logPath"
-pushd services/vault-api/cmd/server
-if ($IsWindows) {
-    Start-Process -FilePath "go" -ArgumentList 'run', '.' -WorkingDirectory (Get-Location) -RedirectStandardOutput $logPath -RedirectStandardError $logPath -NoNewWindow
-} else {
-    nohup go run . > $logPath 2>&1 &
+
+# Resolve server directory relative to this script so we don't rely on cwd
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$serverRel = Join-Path $scriptRoot "..\services\vault-api\cmd\server"
+$serverDir = Resolve-Path $serverRel -ErrorAction SilentlyContinue
+if (-not $serverDir) {
+    Write-Host "ERROR: vault-api server directory not found at $serverRel"
+    Write-Host "PWD: $(Get-Location)"
+    exit 1
 }
-popd
+
+if ($IsWindows) {
+    Write-Host "Starting vault-api via Start-Job (Windows) in $($serverDir.Path)"
+    Start-Job -ScriptBlock {
+        param($d,$l)
+        Set-Location $d
+        & go run . *> $l 2>&1
+    } -ArgumentList $serverDir.Path,$logPath | Out-Null
+} else {
+    Write-Host "Starting vault-api (Unix) in $($serverDir.Path)"
+    Start-Process -FilePath "bash" -ArgumentList "-c", "cd '$($serverDir.Path)' && nohup go run . > '$logPath' 2>&1 &" -NoNewWindow | Out-Null
+}
 
 # short pause then show initial log entries for debugging
 Start-Sleep -Seconds 2
