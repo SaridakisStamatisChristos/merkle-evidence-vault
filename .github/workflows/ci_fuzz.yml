@@ -58,11 +58,16 @@ jobs:
             tail -n 200 /tmp/fuzz.log || true
             exit 1
           fi
+      - name: Minimize bounded crash artifacts
+        if: always()
+        run: ./fuzz/minimize_crash.sh tree_append_leaf
+
       - name: Upload fuzz artifacts (committed corpus)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-corpus
+          retention-days: 30
           path: |
             /tmp/fuzz.log
             services/merkle-engine/fuzz/fuzz-*.log

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -12,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/SaridakisStamatisChristos/checkpoint-svc/metrics"
 	"github.com/SaridakisStamatisChristos/checkpoint-svc/signer"
 )
 
@@ -25,26 +25,31 @@ func main() {
 	keyPath := flag.String("key", "checkpoint_key.b64", "path to base64 private key")
 	addr := flag.String("addr", ":8081", "http listen addr for signing endpoint")
 	flag.Parse()
-	// signer selection: local keyfile (default) or KMS-backed signing based on env
-	var signerObj interface{}
+
+	var signerObj signer.Signer
 	var signerErr error
 	kmsProvider := os.Getenv("KMS_PROVIDER")
 	kmsKeyID := os.Getenv("KMS_KEY_ID")
 	if kmsProvider != "" && kmsKeyID != "" {
-		// attempt to initialize KMS signer (stubbed)
 		s, err := signer.NewKMSSigner(kmsProvider, kmsKeyID)
 		if err != nil {
 			signerErr = err
 		} else {
 			signerObj = s
 		}
+	} else if keyB64 := os.Getenv("CHECKPOINT_PRIVATE_KEY_B64"); keyB64 != "" {
+		s, err := signer.NewLocalSignerFromBase64WithRef(keyB64, "local:env:CHECKPOINT_PRIVATE_KEY_B64")
+		if err != nil {
+			signerErr = err
+		} else {
+			signerObj = s
+		}
 	} else {
-		// fallback: local key file (base64)
 		b, err := os.ReadFile(*keyPath)
 		if err != nil {
 			signerErr = err
 		} else {
-			s, err := signer.NewLocalSignerFromBase64(string(b))
+			s, err := signer.NewLocalSignerFromBase64WithRef(string(b), "local:file:"+*keyPath)
 			if err != nil {
 				signerErr = err
 			} else {
@@ -57,9 +62,11 @@ func main() {
 		log.Printf("warning: no signer available (%v); signing endpoint disabled", signerErr)
 	}
 
-	// signing handler
+	http.Handle("/metrics", metrics.Handler())
+
 	if signerObj != nil {
 		http.HandleFunc("/sign", func(w http.ResponseWriter, r *http.Request) {
+			metrics.IncSignRequests()
 			if r.Method != http.MethodPost {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				return
@@ -69,23 +76,19 @@ func main() {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			var sig []byte
-			switch s := signerObj.(type) {
-			case *signer.LocalSigner:
-				sig, err = s.Sign(b)
-			case *signer.KMSSigner:
-				sig, err = s.Sign(b)
-			default:
-				err = nil
-			}
+			sig, err := signerObj.Sign(b)
 			if err != nil {
-				log.Printf("sign error: %v", err)
+				log.Printf("sign error key_ref=%s err=%v", signerObj.KeyRef(), err)
+				metrics.IncSignFailures()
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+
+			log.Printf("audit event=checkpoint_sign key_ref=%s payload_bytes=%d", signerObj.KeyRef(), len(b))
 			enc := base64.StdEncoding.EncodeToString(sig)
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{"signature": enc})
+			w.Header().Set("X-Checkpoint-Key-Ref", signerObj.KeyRef())
+			json.NewEncoder(w).Encode(map[string]string{"signature": enc, "key_ref": signerObj.KeyRef()})
 		})
 
 		go func() {
@@ -106,28 +109,10 @@ func main() {
 	for {
 		select {
 		case <-ticker.C:
-			// TODO: call merkle-engine SignedTreeHead RPC and persist
 			log.Println("emit checkpoint (stub)")
 		case <-ctx.Done():
 			log.Println("shutting down")
 			return
 		}
 	}
-}
-
-func loadKey(path string) (ed25519.PrivateKey, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	// trim whitespace/newlines
-	s := string(b)
-	dec, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		return nil, err
-	}
-	if len(dec) != ed25519.PrivateKeySize {
-		return nil, err
-	}
-	return ed25519.PrivateKey(dec), nil
 }

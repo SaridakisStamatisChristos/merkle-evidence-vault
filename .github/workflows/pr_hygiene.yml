@@ -1,0 +1,38 @@
+name: PR Hygiene
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          configuration-path: .github/labeler.yml
+
+  template-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR body contains required sections
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for section in "### Summary" "### Checklist" "### Test Notes"; do
+            if ! printf '%s' "$PR_BODY" | grep -Fq "$section"; then
+              echo "Missing required PR template section: $section"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "PR body is missing required template sections"
+            exit 1
+          fi
