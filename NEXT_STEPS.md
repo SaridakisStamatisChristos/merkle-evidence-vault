@@ -25,7 +25,7 @@ This document tracks prioritized tasks moving the project from development/test-
 
 ### Priority 1 — Safety & auth (0–2 weeks)
 - [x] JWKS middleware implemented and CI stabilized with JWKS stub.
-- [x] Final production JWT/JWKS hardening pass implemented for strict bearer parsing, claim validation (iss/aud/exp/nbf/iat), and configurable alg/skew policy. Threat-model review remains ongoing.
+- [x] Final production JWT/JWKS hardening pass implemented for strict bearer parsing, claim validation (iss/aud/exp/nbf/iat), configurable alg/skew policy, and documented failure-mode review.
 
 ### Priority 2 — Integrity hardening (1–3 weeks)
 - [x] Fuzzing baseline complete; scheduled runs enabled; artifact-minimization pipeline + retention policy implemented.
@@ -43,7 +43,6 @@ This document tracks prioritized tasks moving the project from development/test-
 - [~] Replace test-only checkpoint signature flow with verifiable STH endpoints in the audit trail (latest verification endpoint added; full persisted STH history still pending).
 
 ## Suggested execution order
-1. Finish production JWT/JWKS threat-model review + failure-mode testing.
-2. Add/verify CSP policy for any non-API hosted dashboard surface.
-3. Add observability metrics + dashboards/alerts.
-4. Expand checkpoint flow from latest-only verification to persisted verifiable STH history.
+1. Add/verify CSP policy for any non-API hosted dashboard surface.
+2. Add observability metrics + dashboards/alerts.
+3. Expand checkpoint flow from latest-only verification to persisted verifiable STH history.
