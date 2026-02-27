@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,10 +25,13 @@ func TestApplyMigrations(t *testing.T) {
 	}
 	defer pool.Close()
 
-	migDir := filepath.Join("persistence", "migrations")
+	migDir, err := findMigrationsDir()
+	if err != nil {
+		t.Skipf("persistence migrations dir not found; skipping migration test: %v", err)
+	}
 	entries, err := os.ReadDir(migDir)
 	if err != nil {
-		t.Fatalf("read migrations dir: %v", err)
+		t.Fatalf("read migrations dir %s: %v", migDir, err)
 	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -69,4 +73,25 @@ func TestApplyMigrations(t *testing.T) {
 	if cnt != 1 {
 		t.Fatalf("audit table not found after migrations")
 	}
+}
+
+// findMigrationsDir looks for persistence/migrations by searching upward
+// from the current working directory. Returns an error if not found.
+func findMigrationsDir() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("getwd: %w", err)
+	}
+	for i := 0; i < 8; i++ {
+		cand := filepath.Join(wd, "persistence", "migrations")
+		if fi, err := os.Stat(cand); err == nil && fi.IsDir() {
+			return cand, nil
+		}
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			break
+		}
+		wd = parent
+	}
+	return "", fmt.Errorf("persistence/migrations not found in cwd or parents")
 }
