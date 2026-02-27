@@ -1,142 +1,207 @@
-name: Fuzz (ASAN)
+name: "Fuzz (ASAN)"
 
 on:
   workflow_dispatch:
+    inputs:
+      run_mode:
+        description: 'quick=asan job, scheduled=long scheduled profile'
+        required: false
+        default: 'quick'
+        type: choice
+        options:
+          - quick
+          - scheduled
   push:
-    branches: [ main ]
+    branches:
+      - '**'
+    paths:
+      - '.github/workflows/fuzz.yml'
+      - 'services/merkle-engine/**'
+  pull_request:
+    paths:
+      - '.github/workflows/fuzz.yml'
+      - 'services/merkle-engine/**'
   schedule:
-    - cron: '0 2 * * *' # daily at 02:00 UTC
+    - cron: '0 2 * * *'
 
 jobs:
   fuzz-asan:
+    if: github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && inputs.run_mode == 'scheduled')
     runs-on: ubuntu-latest
-    # overall job timeout to avoid runaway CI usage
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake build-essential libssl-dev pkg-config
+          sudo apt-get install -y clang lld
 
       - name: Set up Rust (nightly)
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
-          components: rust-src
           override: true
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz --locked || true
 
-      - name: Build and run fuzz target (ASAN)
-        env:
-          CC: clang
-          CXX: clang++
-          RUSTFLAGS: "-Z sanitizer=address -C prefer-dynamic"
-          RUSTDOCFLAGS: "-Z sanitizer=address"
-          ASAN_OPTIONS: "verbosity=2:detect_leaks=1:log_path=/tmp/asan.log:abort_on_error=1:allow_user_segv_handler=1:malloc_context_size=30"
-          LSAN_OPTIONS: "verbosity=1:log_threads=1:log_path=/tmp/lsan.log"
+      - name: Verify fuzz target
         run: |
-          # run from the crate root so cargo-fuzz locates fuzz/Cargo.toml correctly
-          set -o pipefail
-          # attempt to locate libasan and preload it so interceptors are available early
-          ASAN_LIB=$(gcc -print-file-name=libasan.so 2>/dev/null || true)
-          if [ -n "$ASAN_LIB" ] && [ -f "$ASAN_LIB" ]; then
-            export LD_PRELOAD="$ASAN_LIB"
-            echo "Preloading libasan: $ASAN_LIB"
-          else
-            echo "libasan not found via gcc; proceeding without LD_PRELOAD"
-          fi
-          ulimit -c unlimited || true
-          cd services/merkle-engine
-          # build+run fuzz target; bound total run time to 60s
-          cargo fuzz run tree_append_leaf --release -- -max_total_time=60 -workers=1 -rss_limit_mb=512 2>&1 | tee /tmp/fuzz.log || true
-          # surface sanitizer logs if created
-          if [ -f /tmp/asan.log ]; then echo "--- /tmp/asan.log ---"; sed -n '1,200p' /tmp/asan.log; fi
-          if [ -f /tmp/lsan.log ]; then echo "--- /tmp/lsan.log ---"; sed -n '1,200p' /tmp/lsan.log; fi
+          set -euo pipefail
+          cd services/merkle-engine/fuzz
+          cargo +nightly fuzz list
 
-      - name: Check ASAN/LSAN output for leaks
+      - name: Run bounded ASAN fuzz
+        env:
+          RUSTFLAGS: "-Z sanitizer=address"
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:symbolize=1"
+          LSAN_OPTIONS: "suppressions=/dev/null"
+        run: |
+          set -euo pipefail
+          cd services/merkle-engine/fuzz
+
+          heartbeat() {
+            while true; do
+              sleep 60
+              echo "[heartbeat] fuzz-asan running at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            done
+          }
+
+          monitor_logs() {
+            while true; do
+              if compgen -G "fuzz-*.log" >/dev/null; then
+                echo "[monitor] tail fuzz worker logs"
+                tail -n 40 fuzz-*.log || true
+              else
+                echo "[monitor] waiting for fuzz-*.log"
+              fi
+              sleep 30
+            done
+          }
+
+          heartbeat & HEARTBEAT_PID=$!
+          monitor_logs & MONITOR_PID=$!
+          trap 'kill "$HEARTBEAT_PID" "$MONITOR_PID" 2>/dev/null || true' EXIT
+
+          timeout 8m bash -c 'cargo +nightly fuzz run tree_append_leaf -- -max_total_time=420 -rss_limit_mb=512 -jobs=1 -workers=1 -print_final_stats=1 2>&1 | tee /tmp/fuzz.log' || true
+
+          for f in fuzz-*.log; do
+            [ -f "$f" ] || continue
+            echo "--- $f ---" | tee -a /tmp/fuzz.log
+            tail -n 200 "$f" | tee -a /tmp/fuzz.log || true
+          done
+
+      - name: Validate fuzz output
         if: always()
         run: |
-          if grep -E "LeakSanitizer|Direct leak|ERROR: LeakSanitizer" /tmp/fuzz.log; then
-            echo "Leak detected in ASAN output"; cat /tmp/fuzz.log; exit 1
+          set -euo pipefail
+          if grep -E "ERROR: AddressSanitizer|ERROR: LeakSanitizer|SUMMARY: AddressSanitizer" /tmp/fuzz.log; then
+            echo "ASAN/LSAN error detected"
+            exit 1
+          fi
+          if grep -Eq "#.*(pulse|NEW|REDUCE)|stat::number_of_executed_units" /tmp/fuzz.log; then
+            echo "Fuzzer produced progress output"
           else
-            echo "No leaks detected"
+            echo "Fuzzer did not produce progress output"
+            tail -n 200 /tmp/fuzz.log || true
+            exit 1
           fi
 
-      - name: Upload fuzz artifacts (short run)
+      - name: Upload fuzz artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fuzz-artifacts-short
+          name: fuzz-asan-artifacts
           path: |
+            /tmp/fuzz.log
+            services/merkle-engine/fuzz/fuzz-*.log
             services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
-            fuzz/corpus/minimized/**
+            services/merkle-engine/fuzz/corpus/tree_append_leaf/**
 
-  # Scheduled longer fuzz runs to increase coverage and collect crashes
   fuzz-scheduled:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'scheduled')
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake build-essential libssl-dev pkg-config
+          sudo apt-get install -y clang lld
 
       - name: Set up Rust (nightly)
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
-          components: rust-src
           override: true
 
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz --locked || true
 
-      - name: Run scheduled fuzz (10m)
+      - name: Scheduled fuzz run (ASAN)
         env:
-          CC: clang
-          CXX: clang++
-          RUSTFLAGS: "-Z sanitizer=address -C prefer-dynamic"
-          RUSTDOCFLAGS: "-Z sanitizer=address"
-          ASAN_OPTIONS: "verbosity=2:detect_leaks=1:log_path=/tmp/asan.log:abort_on_error=1:allow_user_segv_handler=1:malloc_context_size=30"
-          LSAN_OPTIONS: "verbosity=1:log_threads=1:log_path=/tmp/lsan.log"
+          RUSTFLAGS: "-Z sanitizer=address"
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:symbolize=1"
         run: |
-          set -o pipefail
-          ASAN_LIB=$(gcc -print-file-name=libasan.so 2>/dev/null || true)
-          if [ -n "$ASAN_LIB" ] && [ -f "$ASAN_LIB" ]; then
-            export LD_PRELOAD="$ASAN_LIB"
-            echo "Preloading libasan: $ASAN_LIB"
-          else
-            echo "libasan not found via gcc; proceeding without LD_PRELOAD"
-          fi
-          ulimit -c unlimited || true
-          cd services/merkle-engine
-          # bound this scheduled run to 600s (10m)
-          cargo fuzz run tree_append_leaf --release -- -max_total_time=600 -workers=1 -rss_limit_mb=1024 2>&1 | tee /tmp/fuzz.log || true
-          if [ -f /tmp/asan.log ]; then echo "--- /tmp/asan.log ---"; sed -n '1,200p' /tmp/asan.log; fi
-          if [ -f /tmp/lsan.log ]; then echo "--- /tmp/lsan.log ---"; sed -n '1,200p' /tmp/lsan.log; fi
+          set -euo pipefail
+          cd services/merkle-engine/fuzz
 
-      - name: Check ASAN/LSAN output for leaks (scheduled)
+          heartbeat() {
+            while true; do
+              sleep 60
+              echo "[heartbeat] fuzz-scheduled running at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            done
+          }
+
+          monitor_logs() {
+            while true; do
+              if compgen -G "fuzz-*.log" >/dev/null; then
+                echo "[monitor] tail fuzz worker logs"
+                tail -n 80 fuzz-*.log || true
+              else
+                echo "[monitor] waiting for fuzz-*.log"
+              fi
+              sleep 30
+            done
+          }
+
+          heartbeat & HEARTBEAT_PID=$!
+          monitor_logs & MONITOR_PID=$!
+          trap 'kill "$HEARTBEAT_PID" "$MONITOR_PID" 2>/dev/null || true' EXIT
+
+          timeout 20m bash -c 'cargo +nightly fuzz run tree_append_leaf -- -max_total_time=1080 -rss_limit_mb=512 -jobs=1 -workers=1 -print_final_stats=1 2>&1 | tee /tmp/fuzz.log' || true
+
+          for f in fuzz-*.log; do
+            [ -f "$f" ] || continue
+            echo "--- $f ---" | tee -a /tmp/fuzz.log
+            tail -n 400 "$f" | tee -a /tmp/fuzz.log || true
+          done
+
+      - name: Validate scheduled output
         if: always()
         run: |
-          if grep -E "LeakSanitizer|Direct leak|ERROR: LeakSanitizer" /tmp/fuzz.log; then
-            echo "Leak detected in ASAN output"; cat /tmp/fuzz.log; exit 1
+          set -euo pipefail
+          if grep -E "ERROR: AddressSanitizer|ERROR: LeakSanitizer|SUMMARY: AddressSanitizer" /tmp/fuzz.log; then
+            echo "ASAN/LSAN error detected"
+            exit 1
+          fi
+          if grep -Eq "#.*(pulse|NEW|REDUCE)|stat::number_of_executed_units" /tmp/fuzz.log; then
+            echo "Scheduled fuzzer produced progress output"
           else
-            echo "No leaks detected"
+            echo "Scheduled fuzzer did not produce progress output"
+            tail -n 200 /tmp/fuzz.log || true
+            exit 1
           fi
 
-      - name: Upload scheduled fuzz artifacts
+      - name: Upload scheduled artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fuzz-artifacts-scheduled
+          name: fuzz-scheduled-artifacts
           path: |
+            /tmp/fuzz.log
+            services/merkle-engine/fuzz/fuzz-*.log
             services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
-            fuzz/corpus/minimized/**
+            services/merkle-engine/fuzz/corpus/tree_append_leaf/**
