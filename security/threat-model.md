@@ -63,7 +63,7 @@
 | I1 | Evidence payload exfiltration via API | Payloads stored in object storage, not DB; API requires authentication | Medium — payload_ref exposed to vault_api service account |
 | I2 | Hash oracle: adversary infers content from content_hash | SHA-256 preimage resistance; no rainbow table risk for structured data | Low |
 | I3 | Signing key leak via environment variable | K8s Secret; env var injected at runtime; never logged | Medium — secrets in env are process-readable |
-| I4 | Frontend XSS: proof data rendered unsanitised | **⚠ NOT YET MITIGATED** — CSP + DOMPurify audit pending | **HIGH — see CONFIDENCE.md** |
+| I4 | Frontend XSS: proof data rendered unsanitised | DOMPurify sanitization + CSP/security headers configured for API and dashboard dev/preview surfaces | Medium — production host-level CSP parity still required in deployment manifests |
 | I5 | PII in evidence labels | Labels are arbitrary strings; operators must enforce PII controls | Medium — no label content scanning in v0.1 |
 
 ### Denial of Service
@@ -91,8 +91,8 @@
 
 | Severity | Count | Items |
 |----------|-------|-------|
-| HIGH     | 1     | I4 (XSS — frontend proof display) |
-| MEDIUM   | 5     | S2, R3, I3, I5, D2 |
+| HIGH     | 0     | — |
+| MEDIUM   | 6     | S2, R3, I3, I4, I5, D2 |
 | LOW      | 17    | All remaining |
 
 ---
@@ -119,7 +119,7 @@ Residual risk: if the configured JWKS endpoint itself is compromised, forged tok
 |----|----------------------|
 | S2 | mTLS between vault-api and merkle-engine deferred to v0.2; network policy limits blast radius |
 | R3 | HSM integration deferred to v0.2 (ADR-002); private key in K8s Secret |
-| I4 | **NOT accepted** — must be remediated before any production deployment |
+| I4 | Partially mitigated in app runtime; final acceptance depends on deployment-tier CSP parity validation |
 | I5 | Operator responsibility; document in compliance guide |
 
 ---
@@ -128,7 +128,7 @@ Residual risk: if the configured JWKS endpoint itself is compromised, forged tok
 
 | Priority | Item | Owner | Target |
 |----------|------|-------|--------|
-| P0 | I4: CSP headers + DOMPurify on proof display | Frontend Lead | v0.2 |
+| P1 | I4: verify production ingress/static-host CSP parity with app policy | Frontend + Infra | v0.2 |
 | P1 | S2: mTLS for vault-api ↔ merkle-engine | Infra | v0.2 |
 | P1 | R3: HSM integration for signing key | Security | v0.2 |
 | P2 | I5: Label content scanning (PII detection) | Backend | v0.3 |

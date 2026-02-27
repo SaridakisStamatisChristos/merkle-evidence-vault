@@ -33,7 +33,7 @@ This document tracks prioritized tasks moving the project from development/test-
 
 ### Priority 3 — Frontend security & UX (1–3 weeks)
 - [x] DOMPurify sanitization path and tests added.
-- [ ] Add/verify CSP header policy for all dashboard/API-served frontend responses.
+- [x] Add/verify CSP header policy for all dashboard/API-served frontend responses.
 
 ### Priority 4 — CI, observability, and ops (1–2 weeks)
 - [x] Compose healthchecks/resource limits and CI hardening baseline completed.
@@ -43,6 +43,5 @@ This document tracks prioritized tasks moving the project from development/test-
 - [~] Replace test-only checkpoint signature flow with verifiable STH endpoints in the audit trail (latest verification endpoint added; full persisted STH history still pending).
 
 ## Suggested execution order
-1. Add/verify CSP policy for any non-API hosted dashboard surface.
-2. Add observability metrics + dashboards/alerts.
-3. Expand checkpoint flow from latest-only verification to persisted verifiable STH history.
+1. Add observability metrics + dashboards/alerts.
+2. Expand checkpoint flow from latest-only verification to persisted verifiable STH history.
