@@ -2,41 +2,79 @@ name: Fuzz (bounded - committed corpus)
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ci_fuzz.yml'
+      - 'services/merkle-engine/**'
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ci_fuzz.yml'
+      - 'services/merkle-engine/**'
 
 jobs:
   fuzz-bounded:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Rust
+
+      - name: Setup Rust (nightly)
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           override: true
-      - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz
-      - name: Bounded fuzz run (short)
-        run: |
-          cd services/merkle-engine || exit 1
-          mkdir -p ../../fuzz/work || true
-          # capture output to /tmp/fuzz.log so we can scan for ASAN/LSAN leaks
-          timeout 30s cargo fuzz run tree_append_leaf ../../fuzz/corpus/minimized -dict=../../fuzz/dict.txt -jobs=1 -workers=1 2>&1 | tee /tmp/fuzz.log || true
 
-      - name: Check ASAN/LSAN output for leaks
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld
+
+      - name: Install cargo-fuzz
+        run: cargo +nightly install cargo-fuzz --locked || true
+
+      - name: Bounded fuzz run (committed corpus)
+        env:
+          RUSTFLAGS: "-Z sanitizer=address"
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:symbolize=1"
+        run: |
+          set -euo pipefail
+          cd services/merkle-engine/fuzz
+
+          timeout 4m bash -c 'cargo +nightly fuzz run tree_append_leaf corpus/minimized -dict=dict.txt -jobs=1 -workers=1 -- -max_total_time=180 -rss_limit_mb=512 -print_final_stats=1 2>&1 | tee /tmp/fuzz.log' || true
+
+          for f in fuzz-*.log; do
+            [ -f "$f" ] || continue
+            echo "--- $f ---" | tee -a /tmp/fuzz.log
+            tail -n 200 "$f" | tee -a /tmp/fuzz.log || true
+          done
+
+      - name: Check ASAN/LSAN and progress
         if: always()
         run: |
-          if grep -E "LeakSanitizer|Direct leak|ERROR: LeakSanitizer|SUMMARY: AddressSanitizer" /tmp/fuzz.log; then
-            echo "Leak detected in fuzz run ASAN/LSAN output"; cat /tmp/fuzz.log; exit 1
-          else
-            echo "No leaks detected in bounded fuzz run"
+          set -euo pipefail
+          if grep -E "ERROR: AddressSanitizer|ERROR: LeakSanitizer|SUMMARY: AddressSanitizer" /tmp/fuzz.log; then
+            echo "Leak/sanitizer issue detected in bounded fuzz run"
+            cat /tmp/fuzz.log
+            exit 1
           fi
+          if grep -Eq "#.*(pulse|NEW|REDUCE)|stat::number_of_executed_units" /tmp/fuzz.log; then
+            echo "Bounded fuzz produced progress output"
+          else
+            echo "Bounded fuzz did not produce progress output"
+            tail -n 200 /tmp/fuzz.log || true
+            exit 1
+          fi
+
       - name: Upload fuzz artifacts (committed corpus)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-corpus
           path: |
-            fuzz/corpus/minimized/**
+            /tmp/fuzz.log
+            services/merkle-engine/fuzz/fuzz-*.log
+            services/merkle-engine/fuzz/corpus/minimized/**
             services/merkle-engine/fuzz/artifacts/tree_append_leaf/**
