@@ -32,11 +32,13 @@ jobs:
 
       - name: Verify Cargo project
         run: |
+          echo "Navigating to the fuzz directory..."
+          cd services/merkle-engine/fuzz
           echo "Listing directory contents..."
           ls -la
           echo "Checking for Cargo.toml..."
           if [ ! -f Cargo.toml ]; then
-            echo "Error: Cargo.toml not found in the current directory." >&2
+            echo "Error: Cargo.toml not found in the fuzz directory." >&2
             exit 1
           fi
           echo "Available fuzz targets:"
@@ -126,7 +128,6 @@ jobs:
 
       - name: Run cargo fuzz with ASan
         run: |
-          # Ensure we are in the correct directory
           cd services/merkle-engine/fuzz
           # Set a timeout to prevent indefinite hangs
           timeout 10m bash -c "cargo fuzz run tree_append_leaf"
