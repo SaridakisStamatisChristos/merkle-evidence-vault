@@ -57,7 +57,7 @@ func TestApplyMigrations(t *testing.T) {
 		}
 	}
 
-	// Verify core tables exist: evidence, audit
+	// Verify core tables exist: evidence, audit_log
 	var cnt int
 	err = pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='evidence'`).Scan(&cnt)
 	if err != nil {
@@ -66,12 +66,12 @@ func TestApplyMigrations(t *testing.T) {
 	if cnt != 1 {
 		t.Fatalf("evidence table not found after migrations")
 	}
-	err = pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='audit'`).Scan(&cnt)
+	err = pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='audit_log'`).Scan(&cnt)
 	if err != nil {
 		t.Fatalf("query audit table: %v", err)
 	}
 	if cnt != 1 {
-		t.Fatalf("audit table not found after migrations")
+		t.Fatalf("audit_log table not found after migrations")
 	}
 }
 
