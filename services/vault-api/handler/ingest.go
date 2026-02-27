@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -47,9 +48,11 @@ var (
 	mu sync.Mutex
 	// keep old globals for memory fallback compatibility; store package
 	// will be used when initialized.
-	storeMap       = map[string]*evidenceRecord{}
-	next     int64 = 0
-	audits         = []auditEntry{}
+	storeMap                = map[string]*evidenceRecord{}
+	next              int64 = 0
+	audits                  = []auditEntry{}
+	checkpointHistory       = map[int64]checkpointResponse{}
+	checkpointOrder         = []int64{}
 )
 
 func (h *IngestHandler) Ingest(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +84,7 @@ func (h *IngestHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]interface{}{"id": id, "content_hash": "", "status": "pending"}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (h *IngestHandler) GetAudit(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +107,7 @@ func (h *IngestHandler) GetAudit(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, map[string]interface{}{"action": "ingest", "resource_id": a.ID})
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"entries": entries})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"entries": entries})
 }
 
 func (h *IngestHandler) GetCheckpointsLatest(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +117,26 @@ func (h *IngestHandler) GetCheckpointsLatest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cp)
+	_ = json.NewEncoder(w).Encode(cp)
+}
+
+// GetCheckpointsHistory returns known checkpoints (latest first).
+func (h *IngestHandler) GetCheckpointsHistory(w http.ResponseWriter, r *http.Request) {
+	if !hasCheckpointAccess(r.Context()) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	_, _ = buildLatestCheckpoint(r.Context())
+
+	mu.Lock()
+	defer mu.Unlock()
+	entries := make([]checkpointResponse, 0, len(checkpointOrder))
+	for i := len(checkpointOrder) - 1; i >= 0; i-- {
+		ts := checkpointOrder[i]
+		entries = append(entries, checkpointHistory[ts])
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"entries": entries})
 }
 
 // VerifyLatestCheckpoint verifies the latest checkpoint signature against
@@ -125,50 +147,41 @@ func (h *IngestHandler) VerifyLatestCheckpoint(w http.ResponseWriter, r *http.Re
 		w.WriteHeader(status)
 		return
 	}
+	verifyCheckpointResponse(w, *cp)
+}
 
-	pubB64 := strings.TrimSpace(os.Getenv("CHECKPOINT_VERIFY_PUBLIC_KEY_B64"))
-	if pubB64 == "" {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]interface{}{"verified": false, "reason": "missing CHECKPOINT_VERIFY_PUBLIC_KEY_B64"})
+// VerifyCheckpointByTreeSize verifies a specific checkpoint by tree size.
+func (h *IngestHandler) VerifyCheckpointByTreeSize(w http.ResponseWriter, r *http.Request) {
+	if !hasCheckpointAccess(r.Context()) {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
-	pubRaw, err := base64.StdEncoding.DecodeString(pubB64)
-	if err != nil || len(pubRaw) != ed25519.PublicKeySize {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]interface{}{"verified": false, "reason": "invalid CHECKPOINT_VERIFY_PUBLIC_KEY_B64"})
+	prefix := "/api/v1/checkpoints/"
+	path := r.URL.Path
+	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, "/verify") {
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	payload, err := json.Marshal(checkpointPayload{TreeSize: cp.TreeSize, RootHash: cp.RootHash})
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+	part := strings.TrimSuffix(strings.TrimPrefix(path, prefix), "/verify")
+	part = strings.Trim(part, "/")
+	treeSize, err := strconv.ParseInt(part, 10, 64)
+	if err != nil || treeSize <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	sig, err := base64.StdEncoding.DecodeString(cp.Signature)
-	if err != nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{"verified": false, "reason": "checkpoint signature is not base64", "tree_size": cp.TreeSize, "root_hash": cp.RootHash, "key_ref": cp.KeyRef})
+
+	mu.Lock()
+	cp, ok := checkpointHistory[treeSize]
+	mu.Unlock()
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	verified := ed25519.Verify(ed25519.PublicKey(pubRaw), payload, sig)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"verified":  verified,
-		"tree_size": cp.TreeSize,
-		"root_hash": cp.RootHash,
-		"signature": cp.Signature,
-		"key_ref":   cp.KeyRef,
-	})
+	verifyCheckpointResponse(w, cp)
 }
 
 func buildLatestCheckpoint(ctx context.Context) (*checkpointResponse, int) {
-	roles := middleware.RolesFromContext(ctx)
-	allowed := false
-	for _, rr := range roles {
-		if rr == "auditor" || rr == "ingester" {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
+	if !hasCheckpointAccess(ctx) {
 		return nil, http.StatusForbidden
 	}
 
@@ -188,6 +201,13 @@ func buildLatestCheckpoint(ctx context.Context) (*checkpointResponse, int) {
 	if treeSize == 0 {
 		return nil, http.StatusNotFound
 	}
+
+	mu.Lock()
+	if cp, exists := checkpointHistory[treeSize]; exists {
+		mu.Unlock()
+		return &cp, http.StatusOK
+	}
+	mu.Unlock()
 
 	root := strings.Repeat("0", 64)
 	payload := checkpointPayload{TreeSize: treeSize, RootHash: root}
@@ -214,7 +234,59 @@ func buildLatestCheckpoint(ctx context.Context) (*checkpointResponse, int) {
 		}
 	}
 
-	return &checkpointResponse{TreeSize: treeSize, RootHash: root, Signature: signature, KeyRef: keyRef}, http.StatusOK
+	cp := checkpointResponse{TreeSize: treeSize, RootHash: root, Signature: signature, KeyRef: keyRef}
+	mu.Lock()
+	if _, exists := checkpointHistory[treeSize]; !exists {
+		checkpointOrder = append(checkpointOrder, treeSize)
+	}
+	checkpointHistory[treeSize] = cp
+	mu.Unlock()
+	return &cp, http.StatusOK
+}
+
+func hasCheckpointAccess(ctx context.Context) bool {
+	roles := middleware.RolesFromContext(ctx)
+	for _, rr := range roles {
+		if rr == "auditor" || rr == "ingester" {
+			return true
+		}
+	}
+	return false
+}
+
+func verifyCheckpointResponse(w http.ResponseWriter, cp checkpointResponse) {
+	pubB64 := strings.TrimSpace(os.Getenv("CHECKPOINT_VERIFY_PUBLIC_KEY_B64"))
+	if pubB64 == "" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"verified": false, "reason": "missing CHECKPOINT_VERIFY_PUBLIC_KEY_B64"})
+		return
+	}
+	pubRaw, err := base64.StdEncoding.DecodeString(pubB64)
+	if err != nil || len(pubRaw) != ed25519.PublicKeySize {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"verified": false, "reason": "invalid CHECKPOINT_VERIFY_PUBLIC_KEY_B64"})
+		return
+	}
+	payload, err := json.Marshal(checkpointPayload{TreeSize: cp.TreeSize, RootHash: cp.RootHash})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	sig, err := base64.StdEncoding.DecodeString(cp.Signature)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"verified": false, "reason": "checkpoint signature is not base64", "tree_size": cp.TreeSize, "root_hash": cp.RootHash, "key_ref": cp.KeyRef})
+		return
+	}
+	verified := ed25519.Verify(ed25519.PublicKey(pubRaw), payload, sig)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"verified":  verified,
+		"tree_size": cp.TreeSize,
+		"root_hash": cp.RootHash,
+		"signature": cp.Signature,
+		"key_ref":   cp.KeyRef,
+	})
 }
 
 func (h *IngestHandler) GetEvidence(w http.ResponseWriter, r *http.Request) {
@@ -226,7 +298,7 @@ func (h *IngestHandler) GetEvidence(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": ev.LeafIndex})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": ev.LeafIndex})
 		return
 	}
 	mu.Lock()
@@ -237,7 +309,7 @@ func (h *IngestHandler) GetEvidence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": rec.LeafIndex})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": rec.LeafIndex})
 }
 
 func (h *IngestHandler) GetProof(w http.ResponseWriter, r *http.Request) {
@@ -254,7 +326,7 @@ func (h *IngestHandler) GetProof(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	root := strings.Repeat("0", 64)
-	json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": *rec.LeafIndex, "tree_size": *rec.LeafIndex + 1, "root": root, "path": []string{}})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"leaf_index": *rec.LeafIndex, "tree_size": *rec.LeafIndex + 1, "root": root, "path": []string{}})
 }
 
 func StartCommitter(period time.Duration) {

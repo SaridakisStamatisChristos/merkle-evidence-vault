@@ -40,7 +40,7 @@ This document tracks prioritized tasks moving the project from development/test-
 - [x] Add Prometheus metrics and dashboard/alerts across `vault-api`, `merkle-engine`, and `checkpoint-svc`.
 
 ## Low priority / longer term
-- [~] Replace test-only checkpoint signature flow with verifiable STH endpoints in the audit trail (latest verification endpoint added; full persisted STH history still pending).
+- [~] Replace test-only checkpoint signature flow with verifiable STH endpoints in the audit trail (latest + tree-size verification endpoints and in-memory history added; durable persisted STH history still pending).
 
 ## Suggested execution order
-1. Expand checkpoint flow from latest-only verification to persisted verifiable STH history.
+1. Persist checkpoint/STH history in durable storage and expose pagination/filtering for auditors.
