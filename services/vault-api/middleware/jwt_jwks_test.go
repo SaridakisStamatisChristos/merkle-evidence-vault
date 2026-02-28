@@ -128,6 +128,25 @@ func mintHS256Token(t *testing.T, iss string, aud []string, sub string) string {
 	return s
 }
 
+func mintRS256TokenWithoutKid(t *testing.T, priv *rsa.PrivateKey, iss string, aud, roles []string, sub string) string {
+	t.Helper()
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"iss":   iss,
+		"aud":   aud,
+		"sub":   sub,
+		"roles": roles,
+		"iat":   now.Unix(),
+		"nbf":   now.Unix(),
+		"exp":   now.Add(5 * time.Minute).Unix(),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	s, err := tok.SignedString(priv)
+	if err != nil {
+		t.Fatalf("sign rs256 without kid: %v", err)
+	}
+	return s
+}
 func b64u(b []byte) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
@@ -297,6 +316,70 @@ func TestJWT_JWKSRoleRequirement(t *testing.T) {
 	}{
 		{name: "token with roles", token: withRoles, wantCode: http.StatusOK},
 		{name: "token without roles", token: withoutRoles, wantCode: http.StatusUnauthorized},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := JWT(next)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set("Authorization", "Bearer "+tt.token)
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != tt.wantCode {
+				t.Fatalf("expected %d got %d", tt.wantCode, rr.Code)
+			}
+		})
+	}
+}
+
+func TestJWT_JWKSRequireKid(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+
+	jwksBody, err := json.Marshal(map[string]interface{}{
+		"keys": []map[string]string{{
+			"kty": "RSA",
+			"kid": "k1",
+			"alg": "RS256",
+			"use": "sig",
+			"n":   b64u(priv.N.Bytes()),
+			"e":   b64u(big.NewInt(int64(priv.PublicKey.E)).Bytes()),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal jwks: %v", err)
+	}
+
+	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if _, writeErr := w.Write(jwksBody); writeErr != nil {
+			t.Fatalf("write jwks response: %v", writeErr)
+		}
+	}))
+	defer jwksSrv.Close()
+
+	t.Setenv("JWKS_URL", jwksSrv.URL)
+	t.Setenv("JWT_ALLOWED_ALGS", "RS256")
+	t.Setenv("JWT_REQUIRED_ISSUER", "issuer-ok")
+	t.Setenv("JWT_REQUIRED_AUDIENCE", "vault-api")
+	t.Setenv("JWT_REQUIRE_KID", "true")
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	withKid := mintRS256Token(t, priv, "k1", "issuer-ok", []string{"vault-api"}, []string{"auditor"}, "subject-1")
+	withoutKid := mintRS256TokenWithoutKid(t, priv, "issuer-ok", []string{"vault-api"}, []string{"auditor"}, "subject-2")
+
+	tests := []struct {
+		name     string
+		token    string
+		wantCode int
+	}{
+		{name: "token with kid", token: withKid, wantCode: http.StatusOK},
+		{name: "token without kid", token: withoutKid, wantCode: http.StatusUnauthorized},
 	}
 
 	for _, tt := range tests {

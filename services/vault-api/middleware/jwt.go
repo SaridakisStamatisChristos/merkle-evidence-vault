@@ -42,6 +42,7 @@ func JWT(next http.Handler) http.Handler {
 	maxTokenTTLSeconds := parseIntEnvDefault("JWT_MAX_TOKEN_TTL_SECONDS", 0)
 	enforceRequiredClaimsConfig := parseBoolEnvDefault("JWT_ENFORCE_REQUIRED_CLAIMS", false)
 	requireJWTRoles := parseBoolEnvDefault("JWT_REQUIRE_ROLES", false)
+	requireJWTKid := parseBoolEnvDefault("JWT_REQUIRE_KID", false)
 	strictConfigValid := true
 	if jwksRequired && enforceRequiredClaimsConfig && (requiredIssuer == "" || len(requiredAudience) == 0) {
 		strictConfigValid = false
@@ -70,6 +71,7 @@ func JWT(next http.Handler) http.Handler {
 		Int64("max_token_ttl_seconds", maxTokenTTLSeconds).
 		Bool("enforce_required_claims_config", enforceRequiredClaimsConfig).
 		Bool("require_jwt_roles", requireJWTRoles).
+		Bool("require_jwt_kid", requireJWTKid).
 		Bool("strict_config_valid", strictConfigValid).
 		Msg("JWT middleware configuration")
 
@@ -107,6 +109,13 @@ func JWT(next http.Handler) http.Handler {
 			if err != nil || !token.Valid {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
+			}
+			if requireJWTKid {
+				kid, _ := token.Header["kid"].(string)
+				if strings.TrimSpace(kid) == "" {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
 			}
 			if !validateStandardClaims(claims, requiredIssuer, requiredAudience, time.Now(), time.Duration(clockSkew)*time.Second, time.Duration(maxTokenTTLSeconds)*time.Second) {
 				w.WriteHeader(http.StatusUnauthorized)
