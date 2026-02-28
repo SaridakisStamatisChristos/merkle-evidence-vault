@@ -40,13 +40,19 @@ func JWT(next http.Handler) http.Handler {
 	jwksMaxAttempts := parseIntEnvDefault("JWT_JWKS_MAX_ATTEMPTS", 12)
 	jwksRetryMs := parseIntEnvDefault("JWT_JWKS_RETRY_MS", 2000)
 	maxTokenTTLSeconds := parseIntEnvDefault("JWT_MAX_TOKEN_TTL_SECONDS", 0)
+	enforceRequiredClaimsConfig := parseBoolEnvDefault("JWT_ENFORCE_REQUIRED_CLAIMS", false)
 	strictConfigValid := true
-	if jwksRequired && (requiredIssuer == "" || len(requiredAudience) == 0) {
+	if jwksRequired && enforceRequiredClaimsConfig && (requiredIssuer == "" || len(requiredAudience) == 0) {
 		strictConfigValid = false
 		log.Error().
 			Bool("missing_required_issuer", requiredIssuer == "").
 			Bool("missing_required_audience", len(requiredAudience) == 0).
-			Msg("invalid JWT configuration for JWKS mode: JWT_REQUIRED_ISSUER and JWT_REQUIRED_AUDIENCE must both be set")
+			Msg("invalid JWT configuration for enforced required claims: JWT_REQUIRED_ISSUER and JWT_REQUIRED_AUDIENCE must both be set")
+	} else if jwksRequired && !enforceRequiredClaimsConfig && (requiredIssuer == "" || len(requiredAudience) == 0) {
+		log.Warn().
+			Bool("missing_required_issuer", requiredIssuer == "").
+			Bool("missing_required_audience", len(requiredAudience) == 0).
+			Msg("JWT_REQUIRED_ISSUER or JWT_REQUIRED_AUDIENCE not set; issuer/audience checks are not fully enforced")
 	}
 
 	log.Info().
@@ -61,6 +67,7 @@ func JWT(next http.Handler) http.Handler {
 		Int64("jwks_max_attempts", jwksMaxAttempts).
 		Int64("jwks_retry_ms", jwksRetryMs).
 		Int64("max_token_ttl_seconds", maxTokenTTLSeconds).
+		Bool("enforce_required_claims_config", enforceRequiredClaimsConfig).
 		Bool("strict_config_valid", strictConfigValid).
 		Msg("JWT middleware configuration")
 
@@ -263,6 +270,18 @@ func parseIntEnvDefault(name string, fallback int64) int64 {
 		return fallback
 	}
 	return n
+}
+
+func parseBoolEnvDefault(name string, fallback bool) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
+	if v == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return b
 }
 
 // RolesFromContext returns roles extracted by the JWT middleware.

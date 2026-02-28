@@ -163,6 +163,7 @@ func TestJWT_JWKSModeRequiresIssuerAndAudienceConfig(t *testing.T) {
 	t.Setenv("JWKS_URL", jwksSrv.URL)
 	t.Setenv("ENABLE_TEST_JWT", "true")
 	t.Setenv("JWT_ALLOWED_ALGS", "RS256")
+	t.Setenv("JWT_ENFORCE_REQUIRED_CLAIMS", "true")
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -194,5 +195,56 @@ func TestJWT_JWKSModeRequiresIssuerAndAudienceConfig(t *testing.T) {
 				t.Fatalf("expected %d got %d", http.StatusUnauthorized, rr.Code)
 			}
 		})
+	}
+}
+
+func TestJWT_JWKSModeMissingIssuerAudienceAllowedWhenNotEnforced(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+
+	jwksBody, err := json.Marshal(map[string]interface{}{
+		"keys": []map[string]string{{
+			"kty": "RSA",
+			"kid": "k1",
+			"alg": "RS256",
+			"use": "sig",
+			"n":   b64u(priv.N.Bytes()),
+			"e":   b64u(big.NewInt(int64(priv.PublicKey.E)).Bytes()),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal jwks: %v", err)
+	}
+
+	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if _, writeErr := w.Write(jwksBody); writeErr != nil {
+			t.Fatalf("write jwks response: %v", writeErr)
+		}
+	}))
+	defer jwksSrv.Close()
+
+	t.Setenv("JWKS_URL", jwksSrv.URL)
+	t.Setenv("ENABLE_TEST_JWT", "true")
+	t.Setenv("JWT_ALLOWED_ALGS", "RS256")
+	t.Setenv("JWT_REQUIRED_ISSUER", "")
+	t.Setenv("JWT_REQUIRED_AUDIENCE", "")
+	t.Setenv("JWT_ENFORCE_REQUIRED_CLAIMS", "false")
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	validToken := mintRS256Token(t, priv, "k1", "issuer-ok", []string{"vault-api"}, []string{"auditor"}, "subject-1")
+
+	h := JWT(next)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+validToken)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected %d got %d", http.StatusOK, rr.Code)
 	}
 }
