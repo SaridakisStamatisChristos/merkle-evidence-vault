@@ -4,10 +4,41 @@
 /scripts/ci_*.token
 /scripts/ci_jwks_env.txt
 
-# Editor and OS files
+# Editor artifacts
 *.swp
 *.swo
 *.bak
-*.tmp
-Thumbs.db
+
+# Rust
+**/target/
+*.rlib
+*.rmeta
+*.d
+
+# cargo-fuzz
+services/merkle-engine/fuzz/target/
+
+# Node
+**/node_modules/
+dist/
+build/
+.vite/
+
+# Explicit frontend/service node_modules (some branches committed these accidentally)
+frontend/**/node_modules/
+services/**/node_modules/
+
+# Windows binaries
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.lib
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs/temp
+*.log
+*.tmp
