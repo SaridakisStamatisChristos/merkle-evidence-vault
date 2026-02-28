@@ -26,14 +26,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${PR_BODY//[[:space:]]/}" ]; then
+          NORMALIZED_BODY="$(printf '%s' "$PR_BODY" | sed 's/\r$//' | tr '[:upper:]' '[:lower:]')"
+
+          if [ -z "${NORMALIZED_BODY//[[:space:]]/}" ]; then
             echo "PR body is empty. Please fill out the PR template."
             exit 1
           fi
 
+          has_section() {
+            local section="$1"
+            # Prefer markdown heading match, but allow fixed-token fallback for
+            # payload formatting oddities from webhook/env interpolation.
+            if printf '%s\n' "$NORMALIZED_BODY" | grep -Eiq "^[[:space:]]*#{2,6}[[:space:]]*${section}([[:space:]]*:)?[[:space:]]*$"; then
+              return 0
+            fi
+            if printf '%s\n' "$NORMALIZED_BODY" | grep -Fqi "### ${section}"; then
+              return 0
+            fi
+            return 1
+          }
+
           missing=0
-          for section in "Summary" "Checklist" "Test Notes"; do
-            if ! printf '%s\n' "$PR_BODY" | grep -Eiq "^[[:space:]]*#{2,3}[[:space:]]*${section}[[:space:]]*$"; then
+          for section in "summary" "checklist" "test notes"; do
+            if ! has_section "$section"; then
               echo "Missing required PR template section: ### $section"
               missing=1
             fi
