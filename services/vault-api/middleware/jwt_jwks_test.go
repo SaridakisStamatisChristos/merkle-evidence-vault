@@ -26,7 +26,7 @@ func TestJWT_JWKSFailureModes(t *testing.T) {
 			"kid": "k1",
 			"alg": "RS256",
 			"use": "sig",
-			"n":   b64u(priv.PublicKey.N.Bytes()),
+			"n":   b64u(priv.N.Bytes()),
 			"e":   b64u(big.NewInt(int64(priv.PublicKey.E)).Bytes()),
 		}},
 	})
@@ -36,7 +36,9 @@ func TestJWT_JWKSFailureModes(t *testing.T) {
 
 	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(jwksBody)
+		if _, writeErr := w.Write(jwksBody); writeErr != nil {
+			t.Fatalf("write jwks response: %v", writeErr)
+		}
 	}))
 	defer jwksSrv.Close()
 

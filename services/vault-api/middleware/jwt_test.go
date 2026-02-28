@@ -3,14 +3,12 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 )
 
 func TestJWT_TestModeRoles(t *testing.T) {
 	// enable explicit test-mode for this unit test
-	os.Setenv("ENABLE_TEST_JWT", "true")
-	defer os.Unsetenv("ENABLE_TEST_JWT")
+	t.Setenv("ENABLE_TEST_JWT", "true")
 	// handler that inspects roles from context
 	h := JWT(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		roles := RolesFromContext(r.Context())
@@ -19,7 +17,9 @@ func TestJWT_TestModeRoles(t *testing.T) {
 			return
 		}
 		// echo first role
-		w.Write([]byte(roles[0]))
+		if _, err := w.Write([]byte(roles[0])); err != nil {
+			t.Fatalf("write response: %v", err)
+		}
 	}))
 
 	// auditor token
@@ -55,12 +55,9 @@ func TestJWT_TestModeRoles(t *testing.T) {
 	}
 }
 
-
 func TestJWT_TestModeDisabledInProductionEnv(t *testing.T) {
-	os.Setenv("ENABLE_TEST_JWT", "true")
-	os.Setenv("APP_ENV", "production")
-	defer os.Unsetenv("ENABLE_TEST_JWT")
-	defer os.Unsetenv("APP_ENV")
+	t.Setenv("ENABLE_TEST_JWT", "true")
+	t.Setenv("APP_ENV", "production")
 
 	h := JWT(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
