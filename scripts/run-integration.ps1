@@ -60,6 +60,20 @@ if ($enableBool) {
 }
 Write-Host "enableBool=$enableBool, Effective ENABLE_TEST_JWT=$env:ENABLE_TEST_JWT, AUTH_POLICY=$env:AUTH_POLICY"
 
+if (-not $enableBool) {
+    $missing = @()
+    if (-not $env:E2E_INGESTER_TOKEN) { $missing += 'E2E_INGESTER_TOKEN' }
+    if (-not $env:E2E_AUDITOR_TOKEN) { $missing += 'E2E_AUDITOR_TOKEN' }
+    if (-not $env:JWKS_URL) { $missing += 'JWKS_URL' }
+    if (-not $env:JWT_REQUIRED_ISSUER) { $missing += 'JWT_REQUIRED_ISSUER' }
+    if (-not $env:JWT_REQUIRED_AUDIENCE) { $missing += 'JWT_REQUIRED_AUDIENCE' }
+    if ($missing.Count -gt 0) {
+        Write-Host "ERROR: strict/JWKS run is missing required auth env(s): $($missing -join ', ')" -ForegroundColor Red
+        Write-Host "Tip: ensure scripts/ci_jwks_env.txt is generated and loaded before running integration tests."
+        exit 1
+    }
+}
+
 $composeFile = "ops/docker/docker-compose.yml"
 if (-not (Test-Path $composeFile)) {
     Write-Error "docker-compose file not found at $composeFile"
