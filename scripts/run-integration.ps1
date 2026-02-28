@@ -22,12 +22,22 @@ $env:E2E_API_URL = $ApiUrl
 if (-not $env:E2E_INGESTER_TOKEN) { $env:E2E_INGESTER_TOKEN = $IngesterToken }
 if (-not $env:E2E_AUDITOR_TOKEN)  { $env:E2E_AUDITOR_TOKEN  = $AuditorToken }
 
-# if JWKS_URL wasn't inherited (bash step might not have passed it), load from file
-if (-not $env:JWKS_URL -and (Test-Path "scripts/ci_jwks_env.txt")) {
+# if CI env file exists, hydrate auth-related variables from it.
+# this keeps behavior deterministic even when parent-shell env propagation differs.
+if (Test-Path "scripts/ci_jwks_env.txt") {
     $content = Get-Content "scripts/ci_jwks_env.txt"
     foreach ($line in $content) {
-        if ($line -match '^JWKS_URL=(.*)$') {
-            $env:JWKS_URL = $matches[1]
+        if ($line -match '^([A-Z0-9_]+)=(.*)$') {
+            $k = $matches[1]
+            $v = $matches[2]
+            switch ($k) {
+                'E2E_INGESTER_TOKEN' { $env:E2E_INGESTER_TOKEN = $v }
+                'E2E_AUDITOR_TOKEN' { $env:E2E_AUDITOR_TOKEN = $v }
+                'E2E_NO_ROLES_TOKEN' { $env:E2E_NO_ROLES_TOKEN = $v }
+                'JWKS_URL' { $env:JWKS_URL = $v }
+                'JWT_REQUIRED_ISSUER' { $env:JWT_REQUIRED_ISSUER = $v }
+                'JWT_REQUIRED_AUDIENCE' { $env:JWT_REQUIRED_AUDIENCE = $v }
+            }
         }
     }
 }
