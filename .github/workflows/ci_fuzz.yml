@@ -60,7 +60,7 @@ jobs:
           fi
       - name: Minimize bounded crash artifacts
         if: always()
-        run: ./fuzz/minimize_crash.sh tree_append_leaf
+        run: bash ./fuzz/minimize_crash.sh tree_append_leaf
 
       - name: Upload fuzz artifacts (committed corpus)
         if: always()

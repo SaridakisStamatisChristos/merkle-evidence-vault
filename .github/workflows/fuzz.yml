@@ -110,7 +110,7 @@ jobs:
 
       - name: Minimize crash artifacts
         if: always()
-        run: ./fuzz/minimize_crash.sh tree_append_leaf
+        run: bash ./fuzz/minimize_crash.sh tree_append_leaf
 
       - name: Upload fuzz artifacts
         if: always()
@@ -202,7 +202,7 @@ jobs:
 
       - name: Minimize scheduled crash artifacts
         if: always()
-        run: ./fuzz/minimize_crash.sh tree_append_leaf
+        run: bash ./fuzz/minimize_crash.sh tree_append_leaf
 
       - name: Upload scheduled artifacts
         if: always()
