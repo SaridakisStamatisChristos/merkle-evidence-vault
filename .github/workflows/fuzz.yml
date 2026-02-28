@@ -26,7 +26,7 @@ on:
 
 jobs:
   fuzz-asan:
-    if: github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && inputs.run_mode == 'scheduled')
+    if: github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode == 'scheduled')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -110,7 +110,7 @@ jobs:
 
       - name: Minimize crash artifacts
         if: always()
-        run: ./fuzz/minimize_crash.sh tree_append_leaf
+        run: bash ./fuzz/minimize_crash.sh tree_append_leaf
 
       - name: Upload fuzz artifacts
         if: always()
@@ -125,7 +125,7 @@ jobs:
             services/merkle-engine/fuzz/corpus/tree_append_leaf/**
 
   fuzz-scheduled:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'scheduled')
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mode == 'scheduled')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -202,7 +202,7 @@ jobs:
 
       - name: Minimize scheduled crash artifacts
         if: always()
-        run: ./fuzz/minimize_crash.sh tree_append_leaf
+        run: bash ./fuzz/minimize_crash.sh tree_append_leaf
 
       - name: Upload scheduled artifacts
         if: always()
