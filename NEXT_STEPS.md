@@ -1,46 +1,101 @@
-# NEXT_STEPS — Merkle Evidence Vault (post-merge snapshot)
+# NEXT_STEPS — Production Plan (2026 Refresh)
 
-This document tracks prioritized tasks moving the project from development/test-shim state toward production readiness.
+This file replaces the previous ad-hoc task list with a production-focused plan based on repository inspection.
 
-## Recent progress
-- [x] Added `scripts/run-integration.ps1` to stand up compose, run integration/e2e, and clean up.
-- [x] Implemented JWKS-capable JWT middleware in `services/vault-api/middleware`; removed implicit test-mode fallback.
-- [x] Added `Store` abstraction and Postgres-backed `pgStore` in `services/vault-api/store`; exercised in integration/e2e paths.
-- [x] Updated `ops/docker/docker-compose.yml` with service healthchecks/resource limits and reproducible env wiring.
-- [x] Added `.github/workflows/ci.yml` for formatting/lint + integration/e2e helper execution.
-- [x] Stabilized CI JWKS flow with `scripts/ci_jwks.go` and CI env handoff (without `ENABLE_TEST_JWT` bypass).
-- [x] Added fuzzing support for `merkle-engine` (fuzz target + ASAN-enabled CI bounded runs).
-- [x] Added checkpoint signing scaffold (`checkpoint-svc`) and integration-style signature verification test.
-- [x] Added migration integration tests (`tests/integration/migration_test.go`).
-- [x] Added frontend sanitization (`DOMPurify`) and sanitization unit tests.
+## Production-grade estimate
 
-## Immediate next steps
-- [x] Add PR metadata process hygiene (reviewers/labels/template summary conventions). (Owner: repo maintainer)
-- [x] Add migration integration tests asserting schema + upgrade-path persistence. (Owner: backend/data)
-- [x] Harden CI stability with compose healthchecks, timeouts, and resource limits. (Owner: infra/CI)
-- [x] Complete scheduled longer fuzz runs with crash artifact collection/minimization and retention policy. (Owner: Rust eng / infra)
-- [x] Productionize checkpoint signing by replacing test keyfiles with KMS/HSM-backed keys plus rotation/audit integration. (Owner: infra/security)
+**Estimated production grade: 68 / 100 ("beta-hardening")**
 
-## Priority roadmap
+### Why this score
+- **Strong foundations (positive):**
+  - Clear architecture and operating docs exist (`README.md`, architecture ADRs, runbooks, threat model).
+  - CI and fuzz workflows are present (`.github/workflows/ci.yml`, `fuzz.yml`, `ci_fuzz.yml`).
+  - Integration/property/e2e test suites exist in `tests/`.
+  - Security/ops artifacts exist (K8s policies, observability dashboards/alerts, policy docs).
+- **Key production gaps (score reducers):**
+  - Existing confidence docs still describe the system as not yet production-ready (`CONFIDENCE.md`, `CONFIDENCE.yaml`).
+  - Remaining risk concentration around auth hardening, checkpoint/signing durability, and operational SLO enforcement.
+  - Evidence of partial/in-progress hardening in prior plans (`IMPLEMENTATION_PLAN.md` previously marked several major items as pending).
 
-### Priority 1 — Safety & auth (0–2 weeks)
-- [x] JWKS middleware implemented and CI stabilized with JWKS stub.
-- [x] Final production JWT/JWKS hardening pass implemented for strict bearer parsing, claim validation (iss/aud/exp/nbf/iat), configurable alg/skew policy, and documented failure-mode review.
+## Top 10 next steps (priority order)
 
-### Priority 2 — Integrity hardening (1–3 weeks)
-- [x] Fuzzing baseline complete; scheduled runs enabled; artifact-minimization pipeline + retention policy implemented.
-- [x] Checkpoint signing scaffold now supports KMS-provider abstraction, env-based key wiring, and signing audit logs.
+1. **Close auth/RBAC hardening to production standard**
+   - Enforce strict JWT validation behavior (issuer/audience/skew/rotation failure modes).
+   - Add abuse-case tests for token expiry, key rotation races, and malformed bearer handling.
+   - Exit criteria: security review sign-off + no test-shim fallback paths.
 
-### Priority 3 — Frontend security & UX (1–3 weeks)
-- [x] DOMPurify sanitization path and tests added.
-- [x] Add/verify CSP header policy for all dashboard/API-served frontend responses.
+2. **Productionize checkpoint signing + key lifecycle**
+   - Move to KMS/HSM backed signing path in all environments above dev.
+   - Implement key rotation runbook automation + signed audit records.
+   - Exit criteria: successful rotation drill and verification from independent auditor flow.
 
-### Priority 4 — CI, observability, and ops (1–2 weeks)
-- [x] Compose healthchecks/resource limits and CI hardening baseline completed.
-- [x] Add Prometheus metrics and dashboard/alerts across `vault-api`, `merkle-engine`, and `checkpoint-svc`.
+3. **Make STH/checkpoint history fully durable and queryable**
+   - Persist signed tree heads/checkpoints with retention and provenance metadata.
+   - Add API pagination/filtering for auditor verification workflows.
+   - Exit criteria: deterministic replay and verification across restart/failover.
 
-## Low priority / longer term
-- [~] Replace test-only checkpoint signature flow with verifiable STH endpoints in the audit trail (latest + tree-size verification endpoints and in-memory history added; durable persisted STH history still pending).
+4. **Raise fuzzing from baseline to sustained assurance**
+   - Add scheduled long-run fuzz budget with artifact retention/minimization.
+   - Track coverage and crash triage SLAs.
+   - Exit criteria: 30-day clean run window with published artifacts.
 
-## Suggested execution order
-1. Persist checkpoint/STH history in durable storage and expose pagination/filtering for auditors.
+5. **Define and enforce SLOs**
+   - Set ingest latency, proof latency, checkpoint freshness, and error-budget SLOs.
+   - Tie alerts to SLO burn rates.
+   - Exit criteria: SLO dashboard + alert runbook validated in game day.
+
+6. **Harden observability end-to-end**
+   - Add RED/USE metrics per service and trace correlation IDs across request boundaries.
+   - Validate dashboards and alert quality (low noise, actionable thresholds).
+   - Exit criteria: on-call dry run resolves seeded incident using only docs + telemetry.
+
+7. **Disaster recovery and backup verification**
+   - Automate backup, restore, and integrity verification for DB + signing metadata.
+   - Define RPO/RTO and exercise them.
+   - Exit criteria: quarterly restore drill meets RPO/RTO targets.
+
+8. **Supply-chain and release governance**
+   - Add SBOM generation, dependency policy gates, and image signing/verification.
+   - Enforce changelog + release checklist quality gates.
+   - Exit criteria: signed release artifact chain and reproducible build evidence.
+
+9. **Performance and capacity qualification**
+   - Build representative load profiles for ingest/proof/checkpoint operations.
+   - Identify scaling limits and tune Postgres/queue/service resource policies.
+   - Exit criteria: capacity model with tested headroom for target traffic.
+
+10. **Operational readiness and compliance evidence**
+   - Consolidate runbooks into incident classes with ownership/escalation paths.
+   - Produce auditable evidence bundle (security controls + test + ops drill records).
+   - Exit criteria: readiness review passes with no Sev-1 open risks.
+
+## 90-day phased execution
+
+### Phase 1 (Weeks 1–3): Security and integrity closure
+- Steps 1–4 execution start.
+- Mandatory outputs:
+  - Auth hardening test matrix.
+  - KMS/HSM integration decision + rollout plan.
+  - Durable checkpoint schema/API proposal.
+  - Scheduled fuzz retention pipeline.
+
+### Phase 2 (Weeks 4–7): Operability and resilience
+- Steps 5–7 execution.
+- Mandatory outputs:
+  - SLOs and burn-rate alerts enabled.
+  - Observability runbook validation report.
+  - Backup/restore drill report.
+
+### Phase 3 (Weeks 8–12): Release confidence and scale
+- Steps 8–10 execution.
+- Mandatory outputs:
+  - Signed, policy-gated release pipeline.
+  - Capacity report with scaling thresholds.
+  - Final production-readiness evidence package.
+
+## Definition of done for “production-ready”
+- No critical/high unresolved security findings.
+- All core user flows covered by deterministic integration/e2e and reliability tests.
+- SLOs defined, measured, and alerting with proven incident response.
+- Key management, checkpoint verification, and recovery drills validated.
+- Release artifacts signed, traceable, and reproducible.
