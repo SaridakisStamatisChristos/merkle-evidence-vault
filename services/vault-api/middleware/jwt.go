@@ -41,6 +41,7 @@ func JWT(next http.Handler) http.Handler {
 	jwksRetryMs := parseIntEnvDefault("JWT_JWKS_RETRY_MS", 2000)
 	maxTokenTTLSeconds := parseIntEnvDefault("JWT_MAX_TOKEN_TTL_SECONDS", 0)
 	enforceRequiredClaimsConfig := parseBoolEnvDefault("JWT_ENFORCE_REQUIRED_CLAIMS", false)
+	requireJWTRoles := parseBoolEnvDefault("JWT_REQUIRE_ROLES", false)
 	strictConfigValid := true
 	if jwksRequired && enforceRequiredClaimsConfig && (requiredIssuer == "" || len(requiredAudience) == 0) {
 		strictConfigValid = false
@@ -68,6 +69,7 @@ func JWT(next http.Handler) http.Handler {
 		Int64("jwks_retry_ms", jwksRetryMs).
 		Int64("max_token_ttl_seconds", maxTokenTTLSeconds).
 		Bool("enforce_required_claims_config", enforceRequiredClaimsConfig).
+		Bool("require_jwt_roles", requireJWTRoles).
 		Bool("strict_config_valid", strictConfigValid).
 		Msg("JWT middleware configuration")
 
@@ -111,6 +113,10 @@ func JWT(next http.Handler) http.Handler {
 				return
 			}
 			roles := parseRoles(claims)
+			if requireJWTRoles && len(roles) == 0 {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 			sub, _ := claims["sub"].(string)
 			ctx := context.WithValue(r.Context(), ctxKeyRoles, roles)
 			ctx = context.WithValue(ctx, ctxKeySub, sub)

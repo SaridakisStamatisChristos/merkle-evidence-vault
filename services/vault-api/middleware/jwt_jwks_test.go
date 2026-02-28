@@ -248,3 +248,67 @@ func TestJWT_JWKSModeMissingIssuerAudienceAllowedWhenNotEnforced(t *testing.T) {
 		t.Fatalf("expected %d got %d", http.StatusOK, rr.Code)
 	}
 }
+
+func TestJWT_JWKSRoleRequirement(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+
+	jwksBody, err := json.Marshal(map[string]interface{}{
+		"keys": []map[string]string{{
+			"kty": "RSA",
+			"kid": "k1",
+			"alg": "RS256",
+			"use": "sig",
+			"n":   b64u(priv.N.Bytes()),
+			"e":   b64u(big.NewInt(int64(priv.PublicKey.E)).Bytes()),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal jwks: %v", err)
+	}
+
+	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if _, writeErr := w.Write(jwksBody); writeErr != nil {
+			t.Fatalf("write jwks response: %v", writeErr)
+		}
+	}))
+	defer jwksSrv.Close()
+
+	t.Setenv("JWKS_URL", jwksSrv.URL)
+	t.Setenv("JWT_ALLOWED_ALGS", "RS256")
+	t.Setenv("JWT_REQUIRED_ISSUER", "issuer-ok")
+	t.Setenv("JWT_REQUIRED_AUDIENCE", "vault-api")
+	t.Setenv("JWT_REQUIRE_ROLES", "true")
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	withRoles := mintRS256Token(t, priv, "k1", "issuer-ok", []string{"vault-api"}, []string{"auditor"}, "subject-1")
+	withoutRoles := mintRS256Token(t, priv, "k1", "issuer-ok", []string{"vault-api"}, nil, "subject-2")
+
+	tests := []struct {
+		name     string
+		token    string
+		wantCode int
+	}{
+		{name: "token with roles", token: withRoles, wantCode: http.StatusOK},
+		{name: "token without roles", token: withoutRoles, wantCode: http.StatusUnauthorized},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := JWT(next)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set("Authorization", "Bearer "+tt.token)
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != tt.wantCode {
+				t.Fatalf("expected %d got %d", tt.wantCode, rr.Code)
+			}
+		})
+	}
+}
