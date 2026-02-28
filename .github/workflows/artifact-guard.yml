@@ -1,0 +1,35 @@
+name: Artifact Guard
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  forbid-tracked-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail if build artifacts are tracked
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # List tracked files that should never be committed
+          offenders="$(git ls-files | grep -E '(^|/)(node_modules|target)(/|$)|\.(exe|pdb|rlib|rmeta|ilk|obj|lib)$' || true)"
+
+          if [[ -n "${offenders}" ]]; then
+            echo "❌ Forbidden tracked artifacts detected:"
+            echo "${offenders}"
+            echo
+            echo "Fix:"
+            echo "  - Ensure .gitignore ignores these paths"
+            echo "  - Remove from index: git rm -r --cached <path> && git commit"
+            exit 1
+          fi
+
+          echo "✅ No forbidden tracked artifacts found."
