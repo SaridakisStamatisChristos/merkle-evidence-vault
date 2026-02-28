@@ -54,3 +54,23 @@ func TestJWT_TestModeRoles(t *testing.T) {
 		t.Fatalf("expected 401 got %d", rr.Code)
 	}
 }
+
+
+func TestJWT_TestModeDisabledInProductionEnv(t *testing.T) {
+	os.Setenv("ENABLE_TEST_JWT", "true")
+	os.Setenv("APP_ENV", "production")
+	defer os.Unsetenv("ENABLE_TEST_JWT")
+	defer os.Unsetenv("APP_ENV")
+
+	h := JWT(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer auditor-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 got %d", rr.Code)
+	}
+}

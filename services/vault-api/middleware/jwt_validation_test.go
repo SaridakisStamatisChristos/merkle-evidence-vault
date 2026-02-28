@@ -61,3 +61,26 @@ func TestValidateStandardClaims(t *testing.T) {
 		t.Fatalf("expected expired token to fail")
 	}
 }
+
+func TestIsTestJWTAllowedEnv(t *testing.T) {
+	tests := []struct {
+		name   string
+		appEnv string
+		want   bool
+	}{
+		{name: "empty defaults to allowed", appEnv: "", want: true},
+		{name: "development allowed", appEnv: "development", want: true},
+		{name: "dev allowed", appEnv: "dev", want: true},
+		{name: "ci allowed", appEnv: "ci", want: true},
+		{name: "production disallowed", appEnv: "production", want: false},
+		{name: "staging disallowed", appEnv: "staging", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isTestJWTAllowedEnv(tt.appEnv); got != tt.want {
+				t.Fatalf("expected %v got %v", tt.want, got)
+			}
+		})
+	}
+}

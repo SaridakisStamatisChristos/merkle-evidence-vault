@@ -27,6 +27,11 @@ func JWT(next http.Handler) http.Handler {
 	var jwks *keyfunc.JWKS
 	jwksURL := os.Getenv("JWKS_URL")
 	enableTest := os.Getenv("ENABLE_TEST_JWT") == "true"
+	appEnv := strings.ToLower(strings.TrimSpace(firstNonEmptyEnv("APP_ENV", "ENVIRONMENT", "DEPLOY_ENV")))
+	if enableTest && !isTestJWTAllowedEnv(appEnv) {
+		log.Error().Str("app_env", appEnv).Msg("ENABLE_TEST_JWT requested in non-development environment; disabling test JWT mode")
+		enableTest = false
+	}
 	requiredIssuer := strings.TrimSpace(os.Getenv("JWT_REQUIRED_ISSUER"))
 	requiredAudience := parseCSVEnv("JWT_REQUIRED_AUDIENCE")
 	allowedAlgs := parseCSVEnvDefault("JWT_ALLOWED_ALGS", []string{"RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA"})
@@ -35,6 +40,7 @@ func JWT(next http.Handler) http.Handler {
 	log.Info().
 		Str("jwks_url", jwksURL).
 		Bool("enable_test_jwt", enableTest).
+		Str("app_env", appEnv).
 		Str("required_issuer", requiredIssuer).
 		Strs("required_audience", requiredAudience).
 		Strs("allowed_algs", allowedAlgs).
@@ -101,6 +107,24 @@ func JWT(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, ctxKeySub, tokenStr)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func firstNonEmptyEnv(names ...string) string {
+	for _, name := range names {
+		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func isTestJWTAllowedEnv(appEnv string) bool {
+	switch appEnv {
+	case "", "dev", "development", "local", "test", "ci":
+		return true
+	default:
+		return false
+	}
 }
 
 func parseRoles(claims jwt.MapClaims) []string {
