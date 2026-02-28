@@ -1,52 +1,127 @@
-# Implementation Plan — Merkle Evidence Vault
+# IMPLEMENTATION_PLAN — Path to Production (Execution Version)
 
-This document converts `NEXT_STEPS.md` priorities into an actionable implementation plan. The auth/JWT layer remains intentionally scheduled last.
+This execution plan implements `NEXT_STEPS.md` and replaces the previous implementation document.
 
-## Goals
-- Move from test-shim to production-ready: integrity, signing, observability, CI hardening, and frontend safety.
-- Keep the auth layer last for integration after foundational systems are stable.
+## Baseline assessment
 
-## Current Status Snapshot
-- [x] CI green and integration/e2e helper stabilized.
-- [x] DB migration integration tests added (`tests/integration/migration_test.go`).
-- [x] Frontend DOMPurify sanitization + tests added (`frontend/audit-dashboard/src/sanitize.js`, `frontend/audit-dashboard/src/__tests__/sanitize.test.js`).
-- [x] CI/infra hardening completed for compose healthchecks/resource limits and CI timeout updates.
-- [~] Scheduled fuzz workflow enabled; artifact collection/minimization follow-through still pending.
+- Current estimated grade: **68/100**.
+- Target grade for production launch: **90+/100**.
+- Planning horizon: **12 weeks**.
 
-## Sequenced Work (ordered)
+## Workstreams
 
-1. [x] Add DB migration integration tests
-   - Deliverable: tests that run `persistence/migrations`, verify schema, and validate persisted evidence/audit records after upgrade paths.
-   - Status: completed.
+## WS1 — Security & Identity (Owner: Platform Security)
+**Objective:** production-grade authN/authZ and key handling.
 
-2. [ ] Harden checkpoint signing (KMS/HSM + rotation + audit)
-   - Deliverable: replace test keyfile usage with pluggable KMS/HSM-backed signer, rotation workflow, and audit hooks.
-   - Notes: keep env-driven signer interface in `checkpoint-svc` and `vault-api`.
+### Tasks
+- Finalize strict JWT/JWKS validation policy and negative-path tests.
+- Remove/forbid any non-production auth bypass behavior in runtime config.
+- Integrate KMS/HSM signing path for checkpoint operations.
+- Add key rotation automation and audit trail hooks.
 
-3. [ ] Complete long cargo-fuzz runs + artifact collection
-   - Deliverable: scheduled CI job (nightly/weekly) for `merkle-engine` fuzz runs plus crash artifact minimization/collection.
-   - Status: schedule is in place; still need artifact retention/minimization loop finalized.
+### Deliverables
+- `auth-hardening-report.md` (new artifact in `evidence/`).
+- Rotation drill output and signed verification transcript.
 
-4. [ ] Add verifiable STHs in audit trail (replace test-only signatures)
-   - Deliverable: append verifiable Signed Tree Heads (STHs) into audit records and expose STHs for verification.
-   - Notes: align this with checkpoint-signing hardening.
-
-5. [x] Frontend security baseline: DOMPurify + sanitization tests
-   - Deliverable: DOMPurify integration and frontend tests validating sanitized output.
-   - Remaining: formal CSP rollout can be tracked as a follow-on hardening item if desired.
-
-6. [x] CI/infra hardening baseline
-   - Deliverable: compose healthchecks, container resource limits, and CI stability hardening.
-   - Status: completed.
-
-7. [ ] Observability: Prometheus metrics, dashboards, alerts
-   - Deliverable: basic metrics (ingest rate, sign ops, DB migrations), Prometheus exporter, Grafana dashboard and alerts.
-
-8. [ ] Finalize auth layer: production JWT/JWKS integration (LAST)
-   - Deliverable: production JWKS provider integration, robust JWT validation/caching/rotation behavior, and test coverage.
-
-## Next execution focus
-- Recommended next: finish item 3 (fuzz artifact pipeline), then item 2 (KMS/HSM signing), then item 4 (verifiable STHs).
+### Exit criteria
+- Security review approved.
+- Rotation drill executed successfully twice (including rollback case).
 
 ---
-Generated from `NEXT_STEPS.md` priorities; statuses updated to reflect completed vs pending work.
+
+## WS2 — Integrity & Verifiability (Owner: Core Backend)
+**Objective:** durable verifiable checkpoints and replay safety.
+
+### Tasks
+- Persist STH/checkpoint history with immutable append semantics.
+- Add auditor-focused API for listing/filtering/history replay.
+- Add integration tests for restart/failover replay verification.
+
+### Deliverables
+- Migration(s) for durable checkpoint storage.
+- API contract updates and verifier tests.
+
+### Exit criteria
+- Independent verifier can confirm proofs/checkpoints after restart.
+- No data-loss in simulated failure scenarios.
+
+---
+
+## WS3 — Reliability, SLOs, and Observability (Owner: SRE)
+**Objective:** measurable reliability and operable incidents.
+
+### Tasks
+- Define service SLOs (ingest, proof, checkpoint freshness, error rate).
+- Implement burn-rate alerts and severity mapping.
+- Add telemetry completeness checks (metrics/traces/log correlation).
+- Run incident game day against real alerts/runbooks.
+
+### Deliverables
+- SLO dashboard + alert rules.
+- Game day report with remediation actions.
+
+### Exit criteria
+- On-call can detect/triage/mitigate seeded incident within target MTTR.
+
+---
+
+## WS4 — Quality & Assurance (Owner: QA + Language Owners)
+**Objective:** sustained confidence via testing and fuzz assurance.
+
+### Tasks
+- Expand abuse-case and property-test coverage for critical paths.
+- Schedule long-run fuzz jobs with artifact retention and minimization.
+- Add regression replay checks in CI for minimized crash corpus.
+
+### Deliverables
+- Weekly fuzz summary artifact.
+- Updated test matrix mapped to critical risks.
+
+### Exit criteria
+- 30 days of clean fuzz runs or documented mitigations for findings.
+
+---
+
+## WS5 — Release Engineering & Compliance Evidence (Owner: DevEx)
+**Objective:** repeatable, signed, auditable releases.
+
+### Tasks
+- Generate SBOMs and enforce dependency policy gates.
+- Sign release artifacts/images and verify signatures in deploy pipeline.
+- Add production readiness checklist to release process.
+
+### Deliverables
+- Signed release manifest.
+- Evidence bundle linking tests, scans, drills, and approvals.
+
+### Exit criteria
+- Release pipeline blocks unsigned or policy-violating artifacts.
+
+## Milestones
+
+### Milestone A (Week 3)
+- WS1 and WS2 design complete; auth/key policy frozen.
+
+### Milestone B (Week 6)
+- Durable checkpoint persistence + initial SLO dashboards live.
+
+### Milestone C (Week 9)
+- Game day complete; fuzz retention and replay loop operational.
+
+### Milestone D (Week 12)
+- Signed release chain + readiness review passed (go/no-go).
+
+## Risks and mitigations
+- **Risk:** KMS/HSM integration delays.
+  - **Mitigation:** provide adapter abstraction and staged provider rollout.
+- **Risk:** Alert noise reduces trust.
+  - **Mitigation:** tune thresholds during game day and postmortem loops.
+- **Risk:** hidden scale bottlenecks.
+  - **Mitigation:** run capacity tests before launch gate, not after.
+
+## Launch gate checklist
+- [ ] Security sign-off (no unresolved high/critical).
+- [ ] Integrity verification sign-off (durable checkpoints + replay).
+- [ ] SLO/observability sign-off (alerts and dashboards validated).
+- [ ] QA sign-off (test matrix + fuzz confidence window).
+- [ ] Release sign-off (signed artifacts + SBOM + approvals).
