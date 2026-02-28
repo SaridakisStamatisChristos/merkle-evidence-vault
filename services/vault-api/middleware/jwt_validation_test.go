@@ -131,3 +131,72 @@ func TestValidateStandardClaims_RejectsExpBeforeIAT(t *testing.T) {
 		t.Fatalf("expected exp before iat to fail")
 	}
 }
+
+func TestResolveAuthPolicy(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func(t *testing.T)
+		appEnv   string
+		jwksURL  string
+		wantMode string
+	}{
+		{
+			name: "explicit jwks rbac",
+			setup: func(t *testing.T) {
+				t.Setenv("AUTH_POLICY", "jwks_rbac")
+			},
+			wantMode: authPolicyJWKSRBAC,
+		},
+		{
+			name: "legacy roles maps to jwks rbac",
+			setup: func(t *testing.T) {
+				t.Setenv("JWT_REQUIRE_ROLES", "true")
+			},
+			wantMode: authPolicyJWKSRBAC,
+		},
+		{
+			name: "jwks url maps to strict",
+			setup: func(t *testing.T) {
+				t.Setenv("JWKS_URL", "http://example/jwks.json")
+			},
+			jwksURL:  "http://example/jwks.json",
+			wantMode: authPolicyJWKSStrict,
+		},
+		{
+			name: "dev env defaults to dev policy",
+			setup: func(t *testing.T) {
+			},
+			appEnv:   "development",
+			wantMode: authPolicyDev,
+		},
+		{
+			name: "prod env defaults to strict",
+			setup: func(t *testing.T) {
+			},
+			appEnv:   "production",
+			wantMode: authPolicyJWKSStrict,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup(t)
+			got := resolveAuthPolicy(tt.appEnv, tt.jwksURL)
+			if got.Mode != tt.wantMode {
+				t.Fatalf("expected mode %q got %q", tt.wantMode, got.Mode)
+			}
+		})
+	}
+}
+
+func TestHasMinimumRBACRoles(t *testing.T) {
+	if hasMinimumRBACRoles([]string{"viewer"}) {
+		t.Fatalf("expected viewer-only roles to fail")
+	}
+	if !hasMinimumRBACRoles([]string{"auditor"}) {
+		t.Fatalf("expected auditor role to pass")
+	}
+	if !hasMinimumRBACRoles([]string{"ingester"}) {
+		t.Fatalf("expected ingester role to pass")
+	}
+}

@@ -41,12 +41,14 @@ Write-Host "JWKS_URL=$env:JWKS_URL"
 if ($enableBool) {
     Write-Host "Enabling test JWT mode for local runs"
     $env:ENABLE_TEST_JWT = 'true'
+    if (-not $env:AUTH_POLICY) { $env:AUTH_POLICY = 'dev' }
 } else {
     Write-Host "Disabling test JWT mode for this run"
     # explicitly set to false so docker-compose substitution works
     $env:ENABLE_TEST_JWT = 'false'
+    if (-not $env:AUTH_POLICY) { $env:AUTH_POLICY = 'jwks_rbac' }
 }
-Write-Host "enableBool=$enableBool, Effective ENABLE_TEST_JWT=$env:ENABLE_TEST_JWT"
+Write-Host "enableBool=$enableBool, Effective ENABLE_TEST_JWT=$env:ENABLE_TEST_JWT, AUTH_POLICY=$env:AUTH_POLICY"
 
 $composeFile = "ops/docker/docker-compose.yml"
 if (-not (Test-Path $composeFile)) {

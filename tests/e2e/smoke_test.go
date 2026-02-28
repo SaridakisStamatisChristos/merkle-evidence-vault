@@ -15,6 +15,7 @@ var (
 	apiURL      = envOr("E2E_API_URL", "https://localhost:8443")
 	auditorTok  = envOr("E2E_AUDITOR_TOKEN", "")
 	ingesterTok = envOr("E2E_INGESTER_TOKEN", "")
+	noRolesTok  = envOr("E2E_NO_ROLES_TOKEN", "")
 )
 
 var e2eClient = &http.Client{
@@ -159,6 +160,21 @@ func TestSmokeRBACEnforcement(t *testing.T) {
 	}
 	unauthResp.Body.Close()
 	t.Log("✓ RBAC: unauthenticated blocked with 401")
+}
+
+func TestSmokeJWKSRBACRejectsTokenWithoutRoles(t *testing.T) {
+	if noRolesTok == "" {
+		t.Skip("E2E_NO_ROLES_TOKEN not set")
+	}
+	if envOr("AUTH_POLICY", "") != "jwks_rbac" {
+		t.Skip("AUTH_POLICY is not jwks_rbac")
+	}
+
+	resp := e2eReq(t, "GET", "/audit", noRolesTok, nil)
+	if resp.StatusCode != 401 {
+		t.Fatalf("expected 401 for no-roles token under jwks_rbac, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
 }
 
 func envOr(key, fallback string) string {

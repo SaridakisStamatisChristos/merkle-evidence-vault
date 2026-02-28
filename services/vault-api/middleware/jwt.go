@@ -18,21 +18,29 @@ type ctxKey string
 const (
 	ctxKeyRoles ctxKey = "roles"
 	ctxKeySub   ctxKey = "sub"
+
+	authPolicyDev        = "dev"
+	authPolicyJWKSStrict = "jwks_strict"
+	authPolicyJWKSRBAC   = "jwks_rbac"
 )
 
-// JWT is a middleware that validates a Bearer token. If JWKS_URL env var is set
-// it verifies signatures using the JWKS endpoint. If JWKS is not configured,
-// test-mode token mapping can be enabled explicitly via ENABLE_TEST_JWT=true.
+type resolvedAuthPolicy struct {
+	Mode                 string
+	Source               string
+	EnableTestJWT        bool
+	JWKSRequired         bool
+	EnforceRequiredClaim bool
+	RequireKid           bool
+	RequireRoles         bool
+}
+
+// JWT is a middleware that validates a Bearer token.
 func JWT(next http.Handler) http.Handler {
 	var jwks *keyfunc.JWKS
-	jwksURL := os.Getenv("JWKS_URL")
-	enableTest := os.Getenv("ENABLE_TEST_JWT") == "true"
-	jwksRequired := strings.TrimSpace(jwksURL) != ""
+	jwksURL := strings.TrimSpace(os.Getenv("JWKS_URL"))
 	appEnv := strings.ToLower(strings.TrimSpace(firstNonEmptyEnv("APP_ENV", "ENVIRONMENT", "DEPLOY_ENV")))
-	if enableTest && !isTestJWTAllowedEnv(appEnv) {
-		log.Error().Str("app_env", appEnv).Msg("ENABLE_TEST_JWT requested in non-development environment; disabling test JWT mode")
-		enableTest = false
-	}
+	policy := resolveAuthPolicy(appEnv, jwksURL)
+
 	requiredIssuer := strings.TrimSpace(os.Getenv("JWT_REQUIRED_ISSUER"))
 	requiredAudience := parseCSVEnv("JWT_REQUIRED_AUDIENCE")
 	allowedAlgs := parseCSVEnvDefault("JWT_ALLOWED_ALGS", []string{"RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA"})
@@ -40,27 +48,30 @@ func JWT(next http.Handler) http.Handler {
 	jwksMaxAttempts := parseIntEnvDefault("JWT_JWKS_MAX_ATTEMPTS", 12)
 	jwksRetryMs := parseIntEnvDefault("JWT_JWKS_RETRY_MS", 2000)
 	maxTokenTTLSeconds := parseIntEnvDefault("JWT_MAX_TOKEN_TTL_SECONDS", 0)
-	enforceRequiredClaimsConfig := parseBoolEnvDefault("JWT_ENFORCE_REQUIRED_CLAIMS", false)
-	requireJWTRoles := parseBoolEnvDefault("JWT_REQUIRE_ROLES", false)
-	requireJWTKid := parseBoolEnvDefault("JWT_REQUIRE_KID", false)
+
 	strictConfigValid := true
-	if jwksRequired && enforceRequiredClaimsConfig && (requiredIssuer == "" || len(requiredAudience) == 0) {
+	if policy.JWKSRequired && jwksURL == "" {
+		strictConfigValid = false
+		log.Error().Msg("invalid JWT configuration for JWKS policy: JWKS_URL must be set")
+	}
+	if policy.EnforceRequiredClaim && (requiredIssuer == "" || len(requiredAudience) == 0) {
 		strictConfigValid = false
 		log.Error().
 			Bool("missing_required_issuer", requiredIssuer == "").
 			Bool("missing_required_audience", len(requiredAudience) == 0).
-			Msg("invalid JWT configuration for enforced required claims: JWT_REQUIRED_ISSUER and JWT_REQUIRED_AUDIENCE must both be set")
-	} else if jwksRequired && !enforceRequiredClaimsConfig && (requiredIssuer == "" || len(requiredAudience) == 0) {
-		log.Warn().
-			Bool("missing_required_issuer", requiredIssuer == "").
-			Bool("missing_required_audience", len(requiredAudience) == 0).
-			Msg("JWT_REQUIRED_ISSUER or JWT_REQUIRED_AUDIENCE not set; issuer/audience checks are not fully enforced")
+			Msg("invalid JWT configuration for strict policy: JWT_REQUIRED_ISSUER and JWT_REQUIRED_AUDIENCE must both be set")
 	}
 
 	log.Info().
+		Str("resolved_auth_policy", policy.Mode).
+		Str("auth_policy_source", policy.Source).
+		Bool("enable_test_jwt", policy.EnableTestJWT).
+		Bool("jwks_required", policy.JWKSRequired).
+		Bool("require_kid", policy.RequireKid).
+		Bool("require_roles", policy.RequireRoles).
+		Bool("enforce_required_claims", policy.EnforceRequiredClaim).
+		Bool("strict_config_valid", strictConfigValid).
 		Str("jwks_url", jwksURL).
-		Bool("enable_test_jwt", enableTest).
-		Bool("jwks_required", jwksRequired).
 		Str("app_env", appEnv).
 		Str("required_issuer", requiredIssuer).
 		Strs("required_audience", requiredAudience).
@@ -69,13 +80,9 @@ func JWT(next http.Handler) http.Handler {
 		Int64("jwks_max_attempts", jwksMaxAttempts).
 		Int64("jwks_retry_ms", jwksRetryMs).
 		Int64("max_token_ttl_seconds", maxTokenTTLSeconds).
-		Bool("enforce_required_claims_config", enforceRequiredClaimsConfig).
-		Bool("require_jwt_roles", requireJWTRoles).
-		Bool("require_jwt_kid", requireJWTKid).
-		Bool("strict_config_valid", strictConfigValid).
 		Msg("JWT middleware configuration")
 
-	if jwksRequired {
+	if policy.JWKSRequired && jwksURL != "" {
 		var err error
 		for i := int64(0); i < jwksMaxAttempts; i++ {
 			jwks, err = keyfunc.Get(jwksURL, keyfunc.Options{RefreshInterval: time.Hour})
@@ -98,7 +105,7 @@ func JWT(next http.Handler) http.Handler {
 			return
 		}
 
-		if jwksRequired && (!strictConfigValid || jwks == nil) {
+		if policy.JWKSRequired && (!strictConfigValid || (jwksURL != "" && jwks == nil)) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -110,7 +117,7 @@ func JWT(next http.Handler) http.Handler {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			if requireJWTKid {
+			if policy.RequireKid {
 				kid, _ := token.Header["kid"].(string)
 				if strings.TrimSpace(kid) == "" {
 					w.WriteHeader(http.StatusUnauthorized)
@@ -122,7 +129,7 @@ func JWT(next http.Handler) http.Handler {
 				return
 			}
 			roles := parseRoles(claims)
-			if requireJWTRoles && len(roles) == 0 {
+			if policy.RequireRoles && !hasMinimumRBACRoles(roles) {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
@@ -133,7 +140,7 @@ func JWT(next http.Handler) http.Handler {
 			return
 		}
 
-		if !enableTest {
+		if !policy.EnableTestJWT {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -152,6 +159,50 @@ func JWT(next http.Handler) http.Handler {
 	})
 }
 
+func resolveAuthPolicy(appEnv, jwksURL string) resolvedAuthPolicy {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("AUTH_POLICY")))
+	source := "explicit_auth_policy"
+	if mode == "" {
+		requireRolesLegacy := parseBoolEnvDefault("JWT_REQUIRE_ROLES", false)
+		requireKidLegacy := parseBoolEnvDefault("JWT_REQUIRE_KID", false)
+		enforceRequiredClaimsLegacy := parseBoolEnvDefault("JWT_ENFORCE_REQUIRED_CLAIMS", false)
+		enableTestLegacy := parseBoolEnvDefault("ENABLE_TEST_JWT", false)
+		switch {
+		case requireRolesLegacy:
+			mode = authPolicyJWKSRBAC
+			source = "legacy_jwt_require_roles"
+		case strings.TrimSpace(jwksURL) != "" || requireKidLegacy || enforceRequiredClaimsLegacy:
+			mode = authPolicyJWKSStrict
+			source = "legacy_jwks_settings"
+		case enableTestLegacy:
+			mode = authPolicyDev
+			source = "legacy_enable_test_jwt"
+		case isTestJWTAllowedEnv(appEnv):
+			mode = authPolicyDev
+			source = "default_dev_env"
+		default:
+			mode = authPolicyJWKSStrict
+			source = "default_non_dev_env"
+		}
+	}
+
+	switch mode {
+	case authPolicyDev:
+		if !isTestJWTAllowedEnv(appEnv) {
+			log.Error().Str("app_env", appEnv).Msg("AUTH_POLICY=dev is only allowed in local/dev/test environments; falling back to jwks_strict")
+			return resolvedAuthPolicy{Mode: authPolicyJWKSStrict, Source: source + "_downgraded_non_dev", JWKSRequired: strings.TrimSpace(jwksURL) != "", EnforceRequiredClaim: true, RequireKid: true}
+		}
+		return resolvedAuthPolicy{Mode: authPolicyDev, Source: source, EnableTestJWT: true}
+	case authPolicyJWKSRBAC:
+		return resolvedAuthPolicy{Mode: authPolicyJWKSRBAC, Source: source, JWKSRequired: true, EnforceRequiredClaim: true, RequireKid: true, RequireRoles: true}
+	case authPolicyJWKSStrict:
+		return resolvedAuthPolicy{Mode: authPolicyJWKSStrict, Source: source, JWKSRequired: strings.TrimSpace(jwksURL) != "", EnforceRequiredClaim: true, RequireKid: true}
+	default:
+		log.Error().Str("auth_policy", mode).Msg("invalid AUTH_POLICY value; defaulting to jwks_strict")
+		return resolvedAuthPolicy{Mode: authPolicyJWKSStrict, Source: "invalid_auth_policy_default", JWKSRequired: strings.TrimSpace(jwksURL) != "", EnforceRequiredClaim: true, RequireKid: true}
+	}
+}
+
 func firstNonEmptyEnv(names ...string) string {
 	for _, name := range names {
 		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
@@ -168,6 +219,15 @@ func isTestJWTAllowedEnv(appEnv string) bool {
 	default:
 		return false
 	}
+}
+
+func hasMinimumRBACRoles(roles []string) bool {
+	for _, role := range roles {
+		if role == "auditor" || role == "ingester" {
+			return true
+		}
+	}
+	return false
 }
 
 func parseRoles(claims jwt.MapClaims) []string {
@@ -208,7 +268,6 @@ func extractBearerToken(auth string) (string, bool) {
 }
 
 func validateStandardClaims(claims jwt.MapClaims, issuer string, audiences []string, now time.Time, skew time.Duration, maxTokenTTL time.Duration) bool {
-
 	sub, ok := claims["sub"].(string)
 	if !ok || strings.TrimSpace(sub) == "" {
 		return false

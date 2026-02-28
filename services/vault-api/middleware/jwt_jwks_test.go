@@ -217,7 +217,7 @@ func TestJWT_JWKSModeRequiresIssuerAndAudienceConfig(t *testing.T) {
 	}
 }
 
-func TestJWT_JWKSModeMissingIssuerAudienceAllowedWhenNotEnforced(t *testing.T) {
+func TestJWT_JWKSModeMissingIssuerAudienceRejectedInStrictPolicy(t *testing.T) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("keygen: %v", err)
@@ -263,8 +263,8 @@ func TestJWT_JWKSModeMissingIssuerAudienceAllowedWhenNotEnforced(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+validToken)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected %d got %d", http.StatusOK, rr.Code)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected %d got %d", http.StatusUnauthorized, rr.Code)
 	}
 }
 
