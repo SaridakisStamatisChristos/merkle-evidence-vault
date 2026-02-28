@@ -228,6 +228,9 @@ func validateStandardClaims(claims jwt.MapClaims, issuer string, audiences []str
 		if !hasIAT || !hasEXP {
 			return false
 		}
+		if expiresAt < issuedAt {
+			return false
+		}
 		if time.Unix(int64(expiresAt), 0).Sub(time.Unix(int64(issuedAt), 0)) > maxTokenTTL {
 			return false
 		}

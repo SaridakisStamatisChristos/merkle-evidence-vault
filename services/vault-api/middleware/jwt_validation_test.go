@@ -116,3 +116,18 @@ func TestValidateStandardClaims_MaxTokenTTL(t *testing.T) {
 		t.Fatalf("expected token ttl under max to pass")
 	}
 }
+
+func TestValidateStandardClaims_RejectsExpBeforeIAT(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	claims := jwt.MapClaims{
+		"sub": "user-1",
+		"iss": "issuer-a",
+		"aud": []string{"vault-api"},
+		"iat": float64(now.Add(10 * time.Minute).Unix()),
+		"nbf": float64(now.Add(-30 * time.Second).Unix()),
+		"exp": float64(now.Add(5 * time.Minute).Unix()),
+	}
+	if validateStandardClaims(claims, "issuer-a", []string{"vault-api"}, now, 60*time.Second, 30*time.Minute) {
+		t.Fatalf("expected exp before iat to fail")
+	}
+}
