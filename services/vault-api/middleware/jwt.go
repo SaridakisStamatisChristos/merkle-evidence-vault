@@ -27,6 +27,7 @@ func JWT(next http.Handler) http.Handler {
 	var jwks *keyfunc.JWKS
 	jwksURL := os.Getenv("JWKS_URL")
 	enableTest := os.Getenv("ENABLE_TEST_JWT") == "true"
+	jwksRequired := strings.TrimSpace(jwksURL) != ""
 	appEnv := strings.ToLower(strings.TrimSpace(firstNonEmptyEnv("APP_ENV", "ENVIRONMENT", "DEPLOY_ENV")))
 	if enableTest && !isTestJWTAllowedEnv(appEnv) {
 		log.Error().Str("app_env", appEnv).Msg("ENABLE_TEST_JWT requested in non-development environment; disabling test JWT mode")
@@ -36,37 +37,46 @@ func JWT(next http.Handler) http.Handler {
 	requiredAudience := parseCSVEnv("JWT_REQUIRED_AUDIENCE")
 	allowedAlgs := parseCSVEnvDefault("JWT_ALLOWED_ALGS", []string{"RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA"})
 	clockSkew := parseIntEnvDefault("JWT_CLOCK_SKEW_SECONDS", 60)
+	jwksMaxAttempts := parseIntEnvDefault("JWT_JWKS_MAX_ATTEMPTS", 12)
+	jwksRetryMs := parseIntEnvDefault("JWT_JWKS_RETRY_MS", 2000)
 
 	log.Info().
 		Str("jwks_url", jwksURL).
 		Bool("enable_test_jwt", enableTest).
+		Bool("jwks_required", jwksRequired).
 		Str("app_env", appEnv).
 		Str("required_issuer", requiredIssuer).
 		Strs("required_audience", requiredAudience).
 		Strs("allowed_algs", allowedAlgs).
 		Int64("clock_skew_seconds", clockSkew).
+		Int64("jwks_max_attempts", jwksMaxAttempts).
+		Int64("jwks_retry_ms", jwksRetryMs).
 		Msg("JWT middleware configuration")
 
-	if jwksURL != "" {
+	if jwksRequired {
 		var err error
-		maxAttempts := 12
-		for i := 0; i < maxAttempts; i++ {
+		for i := int64(0); i < jwksMaxAttempts; i++ {
 			jwks, err = keyfunc.Get(jwksURL, keyfunc.Options{RefreshInterval: time.Hour})
 			if err == nil && jwks != nil {
 				log.Info().Str("jwks_url", jwksURL).Msg("JWKS loaded successfully")
 				break
 			}
-			log.Warn().Err(err).Int("attempt", i+1).Int("max_attempts", maxAttempts).Str("jwks_url", jwksURL).Msg("failed to load JWKS, will retry")
-			time.Sleep(2 * time.Second)
+			log.Warn().Err(err).Int64("attempt", i+1).Int64("max_attempts", jwksMaxAttempts).Str("jwks_url", jwksURL).Msg("failed to load JWKS, will retry")
+			time.Sleep(time.Duration(jwksRetryMs) * time.Millisecond)
 		}
 		if jwks == nil {
-			log.Error().Str("jwks_url", jwksURL).Msg("giving up loading JWKS after retries; falling back to test-mode only if enabled")
+			log.Error().Str("jwks_url", jwksURL).Msg("giving up loading JWKS after retries; JWT auth is fail-closed until JWKS is available")
 		}
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenStr, ok := extractBearerToken(r.Header.Get("Authorization"))
 		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if jwksRequired && jwks == nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

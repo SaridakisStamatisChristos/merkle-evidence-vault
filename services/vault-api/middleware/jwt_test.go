@@ -71,3 +71,23 @@ func TestJWT_TestModeDisabledInProductionEnv(t *testing.T) {
 		t.Fatalf("expected 401 got %d", rr.Code)
 	}
 }
+
+func TestJWT_JWKSConfiguredButUnavailableFailsClosed(t *testing.T) {
+	t.Setenv("ENABLE_TEST_JWT", "true")
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("JWKS_URL", "http://127.0.0.1:1/unreachable-jwks")
+	t.Setenv("JWT_JWKS_MAX_ATTEMPTS", "1")
+	t.Setenv("JWT_JWKS_RETRY_MS", "0")
+
+	h := JWT(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer auditor-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 got %d", rr.Code)
+	}
+}
