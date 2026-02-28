@@ -163,11 +163,11 @@ func TestResolveAuthPolicy(t *testing.T) {
 			wantMode: authPolicyJWKSStrict,
 		},
 		{
-			name: "dev env defaults to dev policy",
+			name: "dev env defaults to strict policy",
 			setup: func(t *testing.T) {
 			},
 			appEnv:   "development",
-			wantMode: authPolicyDev,
+			wantMode: authPolicyJWKSStrict,
 		},
 		{
 			name: "prod env defaults to strict",

@@ -177,12 +177,9 @@ func resolveAuthPolicy(appEnv, jwksURL string) resolvedAuthPolicy {
 		case enableTestLegacy:
 			mode = authPolicyDev
 			source = "legacy_enable_test_jwt"
-		case isTestJWTAllowedEnv(appEnv):
-			mode = authPolicyDev
-			source = "default_dev_env"
 		default:
 			mode = authPolicyJWKSStrict
-			source = "default_non_dev_env"
+			source = "default_strict"
 		}
 	}
 
