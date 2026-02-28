@@ -166,13 +166,17 @@ func TestSmokeJWKSRBACRejectsTokenWithoutRoles(t *testing.T) {
 	if noRolesTok == "" {
 		t.Skip("E2E_NO_ROLES_TOKEN not set")
 	}
-	if envOr("AUTH_POLICY", "") != "jwks_rbac" {
-		t.Skip("AUTH_POLICY is not jwks_rbac")
-	}
+	policy := envOr("AUTH_POLICY", "")
 
 	resp := e2eReq(t, "GET", "/audit", noRolesTok, nil)
-	if resp.StatusCode != 401 {
-		t.Fatalf("expected 401 for no-roles token under jwks_rbac, got %d", resp.StatusCode)
+	if policy == "jwks_rbac" {
+		if resp.StatusCode != 401 {
+			t.Fatalf("expected 401 for no-roles token under jwks_rbac, got %d", resp.StatusCode)
+		}
+	} else {
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			t.Fatalf("expected no-roles token to be denied, got %d (AUTH_POLICY=%q)", resp.StatusCode, policy)
+		}
 	}
 	resp.Body.Close()
 }
