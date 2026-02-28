@@ -131,3 +131,68 @@ func mintHS256Token(t *testing.T, iss string, aud []string, sub string) string {
 func b64u(b []byte) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
+
+func TestJWT_JWKSModeRequiresIssuerAndAudienceConfig(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("keygen: %v", err)
+	}
+
+	jwksBody, err := json.Marshal(map[string]interface{}{
+		"keys": []map[string]string{{
+			"kty": "RSA",
+			"kid": "k1",
+			"alg": "RS256",
+			"use": "sig",
+			"n":   b64u(priv.N.Bytes()),
+			"e":   b64u(big.NewInt(int64(priv.PublicKey.E)).Bytes()),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal jwks: %v", err)
+	}
+
+	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if _, writeErr := w.Write(jwksBody); writeErr != nil {
+			t.Fatalf("write jwks response: %v", writeErr)
+		}
+	}))
+	defer jwksSrv.Close()
+
+	t.Setenv("JWKS_URL", jwksSrv.URL)
+	t.Setenv("ENABLE_TEST_JWT", "true")
+	t.Setenv("JWT_ALLOWED_ALGS", "RS256")
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	validToken := mintRS256Token(t, priv, "k1", "issuer-ok", []string{"vault-api"}, []string{"auditor"}, "subject-1")
+
+	tests := []struct {
+		name     string
+		issuer   string
+		audience string
+	}{
+		{name: "missing issuer", issuer: "", audience: "vault-api"},
+		{name: "missing audience", issuer: "issuer-ok", audience: ""},
+		{name: "missing both", issuer: "", audience: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("JWT_REQUIRED_ISSUER", tt.issuer)
+			t.Setenv("JWT_REQUIRED_AUDIENCE", tt.audience)
+
+			h := JWT(next)
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set("Authorization", "Bearer "+validToken)
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			if rr.Code != http.StatusUnauthorized {
+				t.Fatalf("expected %d got %d", http.StatusUnauthorized, rr.Code)
+			}
+		})
+	}
+}
