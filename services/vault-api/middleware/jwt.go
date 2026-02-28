@@ -39,6 +39,7 @@ func JWT(next http.Handler) http.Handler {
 	clockSkew := parseIntEnvDefault("JWT_CLOCK_SKEW_SECONDS", 60)
 	jwksMaxAttempts := parseIntEnvDefault("JWT_JWKS_MAX_ATTEMPTS", 12)
 	jwksRetryMs := parseIntEnvDefault("JWT_JWKS_RETRY_MS", 2000)
+	maxTokenTTLSeconds := parseIntEnvDefault("JWT_MAX_TOKEN_TTL_SECONDS", 0)
 
 	log.Info().
 		Str("jwks_url", jwksURL).
@@ -51,6 +52,7 @@ func JWT(next http.Handler) http.Handler {
 		Int64("clock_skew_seconds", clockSkew).
 		Int64("jwks_max_attempts", jwksMaxAttempts).
 		Int64("jwks_retry_ms", jwksRetryMs).
+		Int64("max_token_ttl_seconds", maxTokenTTLSeconds).
 		Msg("JWT middleware configuration")
 
 	if jwksRequired {
@@ -88,7 +90,7 @@ func JWT(next http.Handler) http.Handler {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
-			if !validateStandardClaims(claims, requiredIssuer, requiredAudience, time.Now(), time.Duration(clockSkew)*time.Second) {
+			if !validateStandardClaims(claims, requiredIssuer, requiredAudience, time.Now(), time.Duration(clockSkew)*time.Second, time.Duration(maxTokenTTLSeconds)*time.Second) {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
@@ -174,7 +176,12 @@ func extractBearerToken(auth string) (string, bool) {
 	return tok, true
 }
 
-func validateStandardClaims(claims jwt.MapClaims, issuer string, audiences []string, now time.Time, skew time.Duration) bool {
+func validateStandardClaims(claims jwt.MapClaims, issuer string, audiences []string, now time.Time, skew time.Duration, maxTokenTTL time.Duration) bool {
+
+	sub, ok := claims["sub"].(string)
+	if !ok || strings.TrimSpace(sub) == "" {
+		return false
+	}
 	if !claims.VerifyExpiresAt(now.Add(-skew).Unix(), true) {
 		return false
 	}
@@ -196,6 +203,16 @@ func validateStandardClaims(claims jwt.MapClaims, issuer string, audiences []str
 			}
 		}
 		if !ok {
+			return false
+		}
+	}
+	if maxTokenTTL > 0 {
+		issuedAt, hasIAT := claims["iat"].(float64)
+		expiresAt, hasEXP := claims["exp"].(float64)
+		if !hasIAT || !hasEXP {
+			return false
+		}
+		if time.Unix(int64(expiresAt), 0).Sub(time.Unix(int64(issuedAt), 0)) > maxTokenTTL {
 			return false
 		}
 	}
