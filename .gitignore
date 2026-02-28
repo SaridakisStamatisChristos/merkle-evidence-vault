@@ -24,6 +24,10 @@ dist/
 build/
 .vite/
 
+# Explicit frontend/service node_modules (some branches committed these accidentally)
+frontend/**/node_modules/
+services/**/node_modules/
+
 # Windows binaries
 *.exe
 *.pdb
