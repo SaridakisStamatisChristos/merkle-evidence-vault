@@ -1,0 +1,4 @@
+Proof Pack Date: 2026-03-01
+Commit SHA: dda998ae8ebcdb2f9f68efb6d15d64bde9324f8d
+Latest Green CI Run: https://github.com/merkle-evidence-vault/merkle-evidence-vault/actions (run URL to be pinned by release owner)
+Status: pending run URL pinning in this offline packaging step.

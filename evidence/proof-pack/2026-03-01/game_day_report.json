@@ -1,0 +1,15 @@
+{
+  "date": "2026-03-01",
+  "scenario": "merkle-engine down + recovery",
+  "artifact_source": "scripts/game_day_merkle_down.sh|scripts/game_day_merkle_down.ps1",
+  "status": "not_executed_in_packaging_step",
+  "reason": "Proof-pack assembly only; latest game-day output must be copied in by release owner.",
+  "required_fields": [
+    "start_time",
+    "detection_time",
+    "mitigation_time",
+    "recovery_time",
+    "mttr_minutes",
+    "post_recovery_verification"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "date": "2026-03-01",
+  "scenario": "backup -> wipe -> restore -> replay verify",
+  "artifact_source": "scripts/drill_restore.sh|scripts/drill_restore.ps1",
+  "status": "not_executed_in_packaging_step",
+  "reason": "Proof-pack assembly only; latest drill artifact must be copied in by release owner.",
+  "expected_artifacts": [
+    "artifacts/drills/<timestamp>/drill_summary.json",
+    "artifacts/drills/<timestamp>/logs/",
+    "artifacts/drills/<timestamp>/verifier_output.json"
+  ]
+}
