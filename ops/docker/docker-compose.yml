@@ -64,6 +64,7 @@ services:
       dockerfile: ops/docker/Dockerfile.vault-api
     depends_on: [postgres, redis, kafka, merkle-engine]
     environment:
+      - ENV=dev
       # allow overriding test mode from the host environment; default to true for local dev
       - ENABLE_TEST_JWT=${ENABLE_TEST_JWT:-true}
       - DATABASE_URL=postgres://vault_api@postgres:5432/vault?sslmode=disable

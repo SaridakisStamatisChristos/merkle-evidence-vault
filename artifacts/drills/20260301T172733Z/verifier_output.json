@@ -1,0 +1,11 @@
+{
+  "pass": false,
+  "latest_root_matches_expected": false,
+  "checkpoint_signatures_verify": false,
+  "sample_proofs_verify": false,
+  "failures": [
+    "latest root hash mismatch after restore",
+    "checkpoint signature verification failed",
+    "sample evidence proof verification failed"
+  ]
+}

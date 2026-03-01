@@ -61,20 +61,20 @@ restore_summary = {
     "scenario": "backup -> wipe -> restore -> replay verify",
     "status": "executed" if restore_ok else "pending",
     "artifact_source": f"{restore_src}/drill_summary.json" if restore_ok else "",
-    "artifact_copied": str(restore_rel) if restore_ok else "",
+  "artifact_copied": restore_rel.as_posix() if restore_ok else "",
 }
-(pack / "restore_drill_summary.json").write_text(json.dumps(restore_summary, indent=2) + "\n")
+(pack / "restore_drill_summary.json").write_text(json.dumps(restore_summary, indent=2) + "\n", encoding="utf-8")
 
 game_summary = {
     "date": date,
     "scenario": "merkle-engine down + recovery",
     "status": "executed" if game_ok else "pending",
     "artifact_source": f"{game_src}/game_day_report.json" if game_ok else "",
-    "artifact_copied": str(game_rel) if game_ok else "",
+  "artifact_copied": game_rel.as_posix() if game_ok else "",
 }
-(pack / "game_day_report.json").write_text(json.dumps(game_summary, indent=2) + "\n")
+(pack / "game_day_report.json").write_text(json.dumps(game_summary, indent=2) + "\n", encoding="utf-8")
 
-ci_text = (pack / "ci_run.txt").read_text() if (pack / "ci_run.txt").exists() else ""
+ci_text = (pack / "ci_run.txt").read_text(encoding="utf-8") if (pack / "ci_run.txt").exists() else ""
 ci_pinned = bool(re.search(r"actions/runs/\d+", ci_text))
 
 
@@ -87,7 +87,7 @@ def upsert_line(text: str, pattern: str, replacement: str, anchor: str | None = 
 
 readme = Path("README.md")
 if readme.exists():
-    t = readme.read_text()
+    t = readme.read_text(encoding="utf-8")
     t = re.sub(r"Proof Pack \(Production Evidence Packaging, Last verified: [0-9]{4}-[0-9]{2}-[0-9]{2}\)",
                f"Proof Pack (Production Evidence Packaging, Last verified: {date})", t)
     anchor = "## Proof Pack (Production Evidence Packaging, Last verified: "
@@ -100,15 +100,15 @@ if readme.exists():
     t = upsert_line(t, r"^- [✅📦] Game-day:.*$",
                     f"- {'✅' if game_ok else '📦'} Game-day: " + ("executed artifact copied" if game_ok else "packaged, pending latest run artifact copy") + f" (artifact: `evidence/proof-pack/{date}/game_day_report.json`)",
                     anchor)
-    readme.write_text(t)
+    readme.write_text(t, encoding="utf-8")
 
 confidence = Path("CONFIDENCE.md")
 if confidence.exists():
-    t = confidence.read_text()
+    t = confidence.read_text(encoding="utf-8")
     t = re.sub(r"## Evidence Packaging Status \([0-9]{4}-[0-9]{2}-[0-9]{2}\)", f"## Evidence Packaging Status ({date})", t)
     t = re.sub(r"All evidence links below are centralized in: `evidence/proof-pack/[0-9]{4}-[0-9]{2}-[0-9]{2}/`",
                f"All evidence links below are centralized in: `evidence/proof-pack/{date}/`", t)
-    confidence.write_text(t)
+    confidence.write_text(t, encoding="utf-8")
 PY
 
 echo "proof-pack prepared at $PACK_DIR"

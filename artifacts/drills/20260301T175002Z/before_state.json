@@ -1,0 +1,38 @@
+{
+  "checkpoint_http": 200,
+  "checkpoint": {
+    "tree_size": 8,
+    "root_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "key_ref": "local:dev-default"
+  },
+  "checkpoint_verify_http": 0,
+  "checkpoint_verify": {},
+  "proofs": [
+    {
+      "id": "1b2da0b1-067a-4f79-b580-083a221519c1",
+      "http_code": 200,
+      "root": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "9e214c46-0e97-4636-8ef5-989e92b24a86",
+      "http_code": 200,
+      "root": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "efcd6215-b35c-4e81-9b8d-f8f3ab580876",
+      "http_code": 200,
+      "root": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "ids": [
+    "1b2da0b1-067a-4f79-b580-083a221519c1",
+    "9e214c46-0e97-4636-8ef5-989e92b24a86",
+    "efcd6215-b35c-4e81-9b8d-f8f3ab580876",
+    "4e3c7332-30fe-4a62-aca7-8dc5d769600c",
+    "8078e942-1abb-42f7-8f06-7f21041483e4",
+    "37b11002-499f-41f9-a9d2-9d4df858c0d8",
+    "9452a362-3fbc-4194-b42c-bd10f95148e6",
+    "eb906e27-310b-43dc-9b4b-9f2fcd747d01"
+  ]
+}

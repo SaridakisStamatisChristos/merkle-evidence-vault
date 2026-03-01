@@ -1,0 +1,23 @@
+{
+  "checkpoint_http": 0,
+  "checkpoint": {},
+  "checkpoint_verify_http": 0,
+  "checkpoint_verify": {},
+  "proofs": [
+    {
+      "id": "889bc3c0-f947-4660-b81d-22e5b8facc0d",
+      "http_code": 0,
+      "root": ""
+    },
+    {
+      "id": "6d315cb0-ca33-4310-a065-0c95c7f0a3a2",
+      "http_code": 0,
+      "root": ""
+    },
+    {
+      "id": "63bb2972-216b-4b5e-92ac-25866e18a0f8",
+      "http_code": 0,
+      "root": ""
+    }
+  ]
+}

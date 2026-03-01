@@ -1,0 +1,50 @@
+{
+  "expected_root": "0000000000000000000000000000000000000000000000000000000000000000",
+  "before": {
+    "checkpoint": {
+      "tree_size": 8,
+      "root_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "key_ref": "local:dev-default"
+    },
+    "checkpoint_verify": {},
+    "proofs": [
+      {
+        "id": "1b2da0b1-067a-4f79-b580-083a221519c1",
+        "http_code": 200,
+        "root": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "id": "9e214c46-0e97-4636-8ef5-989e92b24a86",
+        "http_code": 200,
+        "root": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "id": "efcd6215-b35c-4e81-9b8d-f8f3ab580876",
+        "http_code": 200,
+        "root": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "after": {
+    "checkpoint": {},
+    "checkpoint_verify": {},
+    "proofs": [
+      {
+        "id": "1b2da0b1-067a-4f79-b580-083a221519c1",
+        "http_code": 0,
+        "root": ""
+      },
+      {
+        "id": "9e214c46-0e97-4636-8ef5-989e92b24a86",
+        "http_code": 0,
+        "root": ""
+      },
+      {
+        "id": "efcd6215-b35c-4e81-9b8d-f8f3ab580876",
+        "http_code": 0,
+        "root": ""
+      }
+    ]
+  }
+}
