@@ -17,13 +17,13 @@ make confidence      # Confidence gate (must pass)
 
 See `CONFIDENCE.md` for the confidence assessment and production readiness.
 
-## Production Evidence (Last verified: 2026-03-01)
+## Proof Pack (Production Evidence Packaging, Last verified: 2026-03-01)
 
-- ✅ CI: integration + e2e green at `dda998ae8ebcdb2f9f68efb6d15d64bde9324f8d` (artifact: `evidence/proof-pack/2026-03-01/ci_run.txt`)
-- ✅ Restore drill: backup → wipe → restore → replay verify (artifact: `evidence/proof-pack/2026-03-01/restore_drill_summary.json`)
-- ✅ Game-day drill: merkle-engine down + recovery (artifact: `evidence/proof-pack/2026-03-01/game_day_report.json`)
-- ✅ Supply chain: SBOM generated + artifacts signed (artifacts: `evidence/proof-pack/2026-03-01/sbom/`, `evidence/proof-pack/2026-03-01/signing/`)
-- ✅ Auth: AUTH_POLICY modes + fail-fast production guardrails (artifact: `evidence/proof-pack/2026-03-01/auth_policy_matrix.md`)
+- 📦 CI: packaged, pending run URL pinning (artifact: `evidence/proof-pack/2026-03-01/ci_run.txt`)
+- 📦 Restore drill: schema + scripts packaged, pending latest run artifact copy (artifact: `evidence/proof-pack/2026-03-01/restore_drill_summary.json`)
+- 📦 Game-day: schema + scripts packaged, pending latest run artifact copy (artifact: `evidence/proof-pack/2026-03-01/game_day_report.json`)
+- 📦 Supply chain: directories prepared, pending latest SBOM/signing output copy (artifacts: `evidence/proof-pack/2026-03-01/sbom/`, `evidence/proof-pack/2026-03-01/signing/`)
+- 📦 Auth: packaged (artifact: `evidence/proof-pack/2026-03-01/auth_policy_matrix.md`)
 
 ## Authentication configuration (vault-api)
 

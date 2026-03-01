@@ -16,8 +16,9 @@ system:
   production_ready: false
   reason: >
     Control coverage is materially improved and evidence is now consolidated in
-    a dated proof-pack. Production claim remains blocked pending fresh executed
-    drill artifacts (restore/game-day), pinned CI success URL, and fully populated
+    a dated proof-pack, increasing auditability/reviewability rather than runtime
+    assurance. Production claim remains blocked pending fresh executed drill
+    artifacts (restore/game-day), pinned CI success URL, and fully populated
     SBOM/signing verification outputs in the proof-pack.
 
 posture:
