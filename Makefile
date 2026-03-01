@@ -51,9 +51,10 @@ confidence:
 	@echo "Run confidence gate"
 	ci/confidence-gate --config CONFIDENCE.yaml || true
 
-.PHONY: proof-pack proof-pack-run
+.PHONY: proof-pack proof-pack-run pin-ci
 
 DATE ?= $(shell date -u +%F)
+SHA ?= $(shell git rev-parse HEAD)
 
 proof-pack:
 	@echo "Preparing proof-pack for $(DATE)"
@@ -65,4 +66,10 @@ proof-pack-run:
 	$(MAKE) integration-test
 	./scripts/drill_restore.sh
 	./scripts/game_day_merkle_down.sh
+	$(MAKE) proof-pack DATE="$(DATE)"
+	$(MAKE) pin-ci SHA="$(shell git rev-parse HEAD)" DATE="$(DATE)"
+
+pin-ci:
+	@echo "Pinning CI run for SHA=$(SHA) DATE=$(DATE)"
+	./scripts/pin_ci.sh "$(SHA)" "$(DATE)"
 	$(MAKE) proof-pack DATE="$(DATE)"
