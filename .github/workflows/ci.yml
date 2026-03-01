@@ -165,7 +165,7 @@ jobs:
       - name: Run integration helper (use JWKS stub for real verification)
         shell: bash
         run: |
-          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 -EnableTestJwt:$false -ApiUrl "http://localhost:8080"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 '-EnableTestJwt:$false' -ApiUrl "http://localhost:8080"
 
       - name: CI cleanup JWKS artifacts
         run: |
