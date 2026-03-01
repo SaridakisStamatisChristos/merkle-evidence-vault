@@ -171,3 +171,64 @@ jobs:
         run: |
           echo "Cleaning up CI JWKS artifacts"
           rm -f scripts/ci_jwks_env.txt || true
+
+
+  sbom-and-vuln-scan:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        working-directory: frontend/audit-dashboard
+        run: |
+          npm ci --prefer-offline --no-fund --no-audit || npm install --no-fund --no-audit
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Install Grype
+        uses: anchore/scan-action/download-grype@v3
+
+      - name: Generate SBOM + npm audit artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/security
+
+          syft dir:. -o spdx-json=artifacts/security/repo.sbom.spdx.json
+          syft dir:./services/vault-api -o spdx-json=artifacts/security/go-vault-api.sbom.spdx.json
+          syft dir:./frontend/audit-dashboard -o spdx-json=artifacts/security/node-frontend.sbom.spdx.json
+
+          (cd frontend/audit-dashboard && npm audit --json > ../../artifacts/security/npm-audit.json || true)
+
+      - name: Build container images for scanning
+        run: |
+          set -euo pipefail
+          docker build -f ops/docker/Dockerfile.vault-api -t local/vault-api:ci .
+          docker build -f ops/docker/Dockerfile.merkle-engine -t local/merkle-engine:ci .
+
+      - name: Generate image SBOMs
+        run: |
+          set -euo pipefail
+          syft local/vault-api:ci -o spdx-json=artifacts/security/image-vault-api.sbom.spdx.json
+          syft local/merkle-engine:ci -o spdx-json=artifacts/security/image-merkle-engine.sbom.spdx.json
+
+      - name: Vulnerability scan (must pass)
+        run: |
+          set -euo pipefail
+          grype local/vault-api:ci --fail-on high -o json > artifacts/security/grype-vault-api.json
+          grype local/merkle-engine:ci --fail-on high -o json > artifacts/security/grype-merkle-engine.json
+
+      - name: Upload security artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-sbom-and-vuln
+          retention-days: 14
+          path: artifacts/security/

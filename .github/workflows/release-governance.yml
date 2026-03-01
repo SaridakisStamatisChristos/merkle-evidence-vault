@@ -1,0 +1,242 @@
+name: Release Governance Gates
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Go unit tests (all modules)
+        run: |
+          set -euo pipefail
+          find . -name go.mod -not -path './.git/*' | while read -r mod; do
+            dir=$(dirname "$mod")
+            case "$dir" in
+              ./tests*)
+                continue
+                ;;
+            esac
+            (cd "$dir" && go test ./... -count=1)
+          done
+
+      - name: Frontend tests
+        working-directory: frontend/audit-dashboard
+        run: |
+          set -euo pipefail
+          npm ci --prefer-offline --no-fund --no-audit || npm install --no-fund --no-audit
+          npm test --silent
+
+  integration-e2e:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start Go JWKS stub and export envs
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup go run scripts/ci_jwks.go > /tmp/ci_jwks.log 2>&1 &
+          for i in {1..30}; do
+            if [ -f scripts/ci_jwks_env.txt ]; then break; fi
+            sleep 1
+          done
+          test -f scripts/ci_jwks_env.txt
+          grep -E '^[A-Z0-9_]+=.*' scripts/ci_jwks_env.txt >> "$GITHUB_ENV"
+
+      - name: Run integration + e2e
+        shell: bash
+        run: |
+          set -euo pipefail
+          pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-integration.ps1 '-EnableTestJwt:$false' -ApiUrl "http://localhost:8080"
+
+  migration-check:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vault_api
+          POSTGRES_PASSWORD: vault_api
+          POSTGRES_DB: vault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vault_api -d vault"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Apply migration validation test
+        env:
+          DATABASE_URL: postgres://vault_api:vault_api@localhost:5432/vault?sslmode=disable
+        run: |
+          set -euo pipefail
+          go test ./tests/integration -run TestApplyMigrations -count=1 -v
+
+  fuzz-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify last scheduled fuzz run succeeded
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflows = ['fuzz.yml', 'ci_fuzz.yml'];
+            let ok = false;
+            for (const wf of workflows) {
+              const res = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: wf,
+                branch: 'main',
+                status: 'completed',
+                per_page: 20,
+              });
+              const success = res.data.workflow_runs.find(r => r.conclusion === 'success');
+              if (success) {
+                core.info(`Found successful run for ${wf}: #${success.run_number}`);
+                ok = true;
+                break;
+              }
+            }
+            if (!ok) {
+              core.setFailed('No successful fuzz workflow run found on main branch.');
+            }
+
+  sbom-vuln-sign:
+    runs-on: ubuntu-latest
+    needs: [unit-tests]
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        working-directory: frontend/audit-dashboard
+        run: |
+          npm ci --prefer-offline --no-fund --no-audit || npm install --no-fund --no-audit
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Install Grype
+        uses: anchore/scan-action/download-grype@v3
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.8.1
+
+      - name: Generate SBOMs and npm audit report
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/release-governance
+          syft dir:. -o spdx-json=artifacts/release-governance/repo.sbom.spdx.json
+          syft dir:./services/vault-api -o spdx-json=artifacts/release-governance/go-vault-api.sbom.spdx.json
+          syft dir:./frontend/audit-dashboard -o spdx-json=artifacts/release-governance/node-frontend.sbom.spdx.json
+          (cd frontend/audit-dashboard && npm audit --json > ../../artifacts/release-governance/npm-audit.json || true)
+
+      - name: Build container images
+        run: |
+          set -euo pipefail
+          docker build -f ops/docker/Dockerfile.vault-api -t local/vault-api:release .
+          docker build -f ops/docker/Dockerfile.merkle-engine -t local/merkle-engine:release .
+
+      - name: Generate image SBOMs
+        run: |
+          set -euo pipefail
+          syft local/vault-api:release -o spdx-json=artifacts/release-governance/image-vault-api.sbom.spdx.json
+          syft local/merkle-engine:release -o spdx-json=artifacts/release-governance/image-merkle-engine.sbom.spdx.json
+
+      - name: Vulnerability scan (must pass)
+        run: |
+          set -euo pipefail
+          grype local/vault-api:release --fail-on high -o json > artifacts/release-governance/grype-vault-api.json
+          grype local/merkle-engine:release --fail-on high -o json > artifacts/release-governance/grype-merkle-engine.json
+
+      - name: Sign SBOM artifacts (keyless)
+        run: |
+          set -euo pipefail
+          for f in artifacts/release-governance/*.sbom.spdx.json; do
+            cosign sign-blob --yes "$f" \
+              --output-signature "$f.sig" \
+              --output-certificate "$f.pem"
+          done
+
+      - name: Verify signatures
+        run: |
+          set -euo pipefail
+          for f in artifacts/release-governance/*.sbom.spdx.json; do
+            cosign verify-blob \
+              --certificate "$f.pem" \
+              --signature "$f.sig" \
+              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+              --certificate-identity-regexp 'https://github.com/.+/.+/.+' \
+              "$f"
+          done
+
+      - name: Upload governance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-governance-${{ github.run_id }}
+          retention-days: 14
+          path: artifacts/release-governance/
+
+  release-gate:
+    runs-on: ubuntu-latest
+    needs:
+      - unit-tests
+      - integration-e2e
+      - migration-check
+      - fuzz-status
+      - sbom-vuln-sign
+    steps:
+      - name: All release governance gates passed
+        run: |
+          echo "All required release governance gates passed."

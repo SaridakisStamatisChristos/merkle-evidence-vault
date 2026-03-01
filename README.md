@@ -94,3 +94,15 @@ Artifacts are written to `artifacts/drills/<timestamp>/` and include:
 - logs under `logs/`
 - `verifier_output.json`
 
+
+
+## Release governance gates
+
+Release governance is enforced by `.github/workflows/release-governance.yml`.
+A release is blocked unless all gates pass:
+
+- unit tests + integration/e2e
+- migration check (`TestApplyMigrations`)
+- fuzz status gate (latest successful fuzz workflow on `main`)
+- SBOM generation (repo, Go, Node, images) + vulnerability scans
+- keyless signing + signature verification for SBOM artifacts
