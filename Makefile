@@ -50,3 +50,19 @@ integration-test: compose-up
 confidence:
 	@echo "Run confidence gate"
 	ci/confidence-gate --config CONFIDENCE.yaml || true
+
+.PHONY: proof-pack proof-pack-run
+
+DATE ?= $(shell date -u +%F)
+
+proof-pack:
+	@echo "Preparing proof-pack for $(DATE)"
+	./scripts/proof_pack.sh "$(DATE)"
+
+proof-pack-run:
+	@echo "Running full workflow for proof-pack $(DATE)"
+	$(MAKE) test
+	$(MAKE) integration-test
+	./scripts/drill_restore.sh
+	./scripts/game_day_merkle_down.sh
+	$(MAKE) proof-pack DATE="$(DATE)"
