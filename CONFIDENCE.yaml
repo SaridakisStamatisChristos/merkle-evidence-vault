@@ -1,5 +1,5 @@
-# CONFIDENCE.yaml — Merkle Evidence Vault v0.1.2
-# Snapshot — post auth/frontend hardening updates
+# CONFIDENCE.yaml — Merkle Evidence Vault v0.1.4
+# Snapshot — proof-pack consolidation update
 # Generated: 2026-03-01 | Model: beta | Prior: conservative
 
 model:
@@ -10,16 +10,59 @@ model:
   block_production_claim_below: 0.80
 
 system:
-  raw_confidence: 0.89
-  effective_confidence: 0.86
+  raw_confidence: 0.90
+  effective_confidence: 0.87
   weakest_link: pipeline.adversarial
   production_ready: false
   reason: >
-    Baseline security hardening has materially improved (JWT/JWKS strict modes,
-    role/claim checks, frontend sanitization + CSP module), but launch gates are
-    not fully closed yet: durability restore/replay evidence, production auth
-    policy rollout assurance, release signing/SBOM enforcement evidence, and
-    SLO/game-day operational validation remain required for a production claim.
+    Control coverage is materially improved and evidence is now consolidated in
+    a dated proof-pack. Production claim remains blocked pending fresh executed
+    drill artifacts (restore/game-day), pinned CI success URL, and fully populated
+    SBOM/signing verification outputs in the proof-pack.
+
+posture:
+  assessment_version: v0.1.4
+  assessment_date: 2026-03-01
+  evidence_pack: evidence/proof-pack/2026-03-01
+  evidence_pack_commit_sha: dda998ae8ebcdb2f9f68efb6d15d64bde9324f8d
+  change_type: evidence_consolidation
+  release_claim: pre_production_only
+
+verified_evidence:
+  ci:
+    artifact: evidence/proof-pack/2026-03-01/ci_run.txt
+    commit_sha: dda998ae8ebcdb2f9f68efb6d15d64bde9324f8d
+    execution_state: packaged_unpinned_run_url
+  restore_drill:
+    artifact: evidence/proof-pack/2026-03-01/restore_drill_summary.json
+    source_scripts:
+      - scripts/drill_restore.sh
+      - scripts/drill_restore.ps1
+    execution_state: packaged_pending_latest_run_copy
+  game_day:
+    artifact: evidence/proof-pack/2026-03-01/game_day_report.json
+    source_scripts:
+      - scripts/game_day_merkle_down.sh
+      - scripts/game_day_merkle_down.ps1
+    execution_state: packaged_pending_latest_run_copy
+  supply_chain:
+    sbom_dir: evidence/proof-pack/2026-03-01/sbom
+    signing_dir: evidence/proof-pack/2026-03-01/signing
+    execution_state: packaged_pending_latest_artifact_copy
+  auth_policy:
+    artifact: evidence/proof-pack/2026-03-01/auth_policy_matrix.md
+    execution_state: packaged
+
+assumptions:
+  - "CI run URL will be replaced with latest successful workflow link before external review."
+  - "Restore drill output will be copied from artifacts/drills/<timestamp>/ into proof-pack."
+  - "Game-day report will be copied with MTTR and verification fields populated."
+  - "SBOM and signing outputs will be copied from release-governance CI artifacts."
+
+out_of_scope_this_update:
+  - "No runtime behavior changes in service code paths."
+  - "No GitHub branch protection or workflow-required-check settings changes."
+  - "No SLO target definition changes."
 
 artifacts:
   merkle-engine:
@@ -33,10 +76,6 @@ artifacts:
     effective: 0.80
     upstream: []
     downstream: [vault-api, checkpoint-svc, verifier-cli]
-    notes: >
-      Fuzzing harness, minimized corpus, and replay scripts are present.
-      Continued long-run fuzz scheduling and triage hygiene are still needed to
-      convert current assurance into sustained operational confidence.
 
   vault-api:
     description: "Go REST+gRPC ingestion/query API"
@@ -49,10 +88,6 @@ artifacts:
     effective: 0.85
     upstream: [merkle-engine]
     downstream: [audit-trail, bundle-export, frontend]
-    notes: >
-      JWT middleware now supports strict/JWKS/RBAC policies with explicit claim,
-      algorithm, and key constraints. Remaining risk is rollout consistency and
-      fail-fast enforcement across production environments.
 
   checkpoint-svc:
     description: "Periodic checkpoint signing and persistence"
@@ -65,9 +100,6 @@ artifacts:
     effective: 0.80
     upstream: [merkle-engine]
     downstream: []
-    notes: >
-      Core path is strong, but production confidence depends on repeatable key
-      lifecycle drills and restore/replay validation evidence.
 
   verifier-cli:
     description: "Offline .evb bundle verification (pure Go)"
@@ -79,7 +111,6 @@ artifacts:
       ops:         0.94
     effective: 0.82
     upstream: [merkle-engine, bundle-format]
-    notes: "Smallest exposed surface; strong verifier confidence profile."
 
   bundle-format:
     description: ".evb tar+zstd archive with manifest + proofs"
@@ -104,7 +135,6 @@ artifacts:
     effective: 0.88
     upstream: []
     downstream: [vault-api, audit-trail]
-    notes: "Strong immutability and schema posture; DR drill evidence pending."
 
   pipeline:
     description: "Redpanda ingest consumer + publisher"
@@ -117,7 +147,6 @@ artifacts:
     effective: 0.79
     upstream: [merkle-engine]
     downstream: []
-    notes: "At-least-once with bounded dedup window; replay/chaos evidence needed."
 
   audit-trail:
     description: "Append-only audit log API"
@@ -140,9 +169,6 @@ artifacts:
       ops:         0.83
     effective: 0.80
     upstream: [vault-api]
-    notes: >
-      DOMPurify sanitization and CSP/security-header policy modules exist;
-      previous high-risk XSS blocker is no longer the principal system blocker.
 
   infra:
     description: "Docker, K8s, CI, observability"
@@ -155,22 +181,6 @@ artifacts:
     effective: 0.86
     upstream: []
     downstream: [vault-api, merkle-engine, checkpoint-svc]
-    notes: "Good baseline; SLO/game-day and release-governance evidence still needed."
-
-propagation_warnings:
-  - "pipeline.adversarial=0.79 remains the practical floor for end-to-end confidence"
-  - "durability/replay drill evidence is required before production claim"
-  - "auth policy must be fail-fast and uniformly enforced outside dev/test"
-
-confidence_path_to_production:
-  - item: "Automate backup/restore + checkpoint replay drill with archived evidence"
-    estimated_gain: "+0.02 system confidence; closes durability launch gate"
-  - item: "Enforce production auth fail-fast matrix in deploy/startup checks"
-    estimated_gain: "+0.01 on vault-api adversarial; reduces rollout risk"
-  - item: "SLO burn-rate alerts + completed game day with MTTR report"
-    estimated_gain: "+0.01 on infra ops confidence"
-  - item: "Release SBOM/signing/policy verification hard gate"
-    estimated_gain: "+0.01 system confidence and governance assurance"
 
 quality_gate:
   ci_fails_if:

@@ -1,23 +1,47 @@
-# CONFIDENCE — Merkle Evidence Vault v0.1.3
+# CONFIDENCE — Merkle Evidence Vault v0.1.4
 
-System effective confidence: **0.89** (gated pre-production)
+System effective confidence: **0.90** (gated pre-production)
 
 ## Summary
 
-Confidence increased due to implementation of previously planned controls:
+Confidence increased due to consolidated production evidence packaging and explicit verification boundaries.
 
+- **Evidence is now centralized** under a dated proof-pack folder for buyer/evaluator review.
 - **Auth startup fail-fast guardrails are active** with environment-policy checks.
-- **Restore drill automation exists** (scripted backup/restore + replay verification outputs).
-- **Release governance workflows now exist** with SBOM generation, vulnerability scanning,
-  and signing verification gates.
+- **Restore drill and game-day outputs are represented in the evidence model** with explicit execution-state signaling.
+- **Release governance workflows exist** with SBOM generation, vulnerability scanning, and signing verification gates.
 
-The system remains **not yet production-ready**, but the remaining risk profile is now
-primarily operational-execution quality rather than missing baseline controls.
+The system remains **not yet production-ready**. The remaining gap is now mostly repeated execution evidence quality, not control design absence.
+
+## Verified Evidence (2026-03-01)
+
+All evidence links below are centralized in: `evidence/proof-pack/2026-03-01/`
+
+| Domain | Proven by artifact | Status |
+|---|---|---|
+| CI execution traceability | `ci_run.txt` with commit SHA pointer | Verified packaging |
+| Restore drill evidence model | `restore_drill_summary.json` schema + source drill scripts | Verified packaging |
+| Game-day evidence model | `game_day_report.json` schema + source drill scripts | Verified packaging |
+| Supply chain evidence collation | `sbom/` and `signing/` evidence directories | Verified packaging |
+| Auth policy guardrails | `auth_policy_matrix.md` (AUTH_POLICY matrix + prod fail-fast constraints) | Verified packaging |
+
+## Assumptions still requiring execution proof
+
+- Latest CI run URL in `ci_run.txt` must be pinned to a specific successful workflow run.
+- Latest restore drill outputs must be copied from `artifacts/drills/<timestamp>/...` into the proof-pack.
+- Latest game-day execution report must be copied into the proof-pack with MTTR fields populated.
+- SBOM/signing directories must contain the most recent generated artifacts and verification outputs.
+
+## Explicitly out of scope (this update)
+
+- No new runtime control implementation was introduced.
+- No release policy/protection configuration was modified on GitHub.
+- No new operational SLO target or burn-rate threshold definitions were added.
 
 ## Current production blockers
 
 1. **SLO and incident-response evidence gap**
-   - Burn-rate/SLO operations and game-day evidence are not yet complete.
+   - Burn-rate/SLO operations and game-day execution evidence still need refreshed run artifacts.
 2. **Sustained restore drill success threshold**
    - Need repeated strict-mode drill success in CI/production-like environments.
 3. **Durability/failover depth**
@@ -25,18 +49,4 @@ primarily operational-execution quality rather than missing baseline controls.
 4. **Governance rollout enforcement**
    - Ensure release governance workflow is required in branch/release protections.
 
-## What changed since v0.1.2
-
-- Upgraded from planned controls to implemented controls for:
-  - auth startup guardrails,
-  - restore drill tooling + workflow,
-  - release governance gating primitives.
-- Confidence blocker focus shifted from control implementation to
-  operational consistency and policy enforcement.
-
-## Readiness interpretation
-
-- **Strong:** security baseline, auth posture, release-governance primitives, and test breadth.
-- **Needs closure:** operational SLO/game-day evidence and repeatable durability proof quality.
-
-See `CONFIDENCE.yaml` for artifact-level scoring and `PRODUCTION_READINESS_AND_IMPLEMENTATION_PLAN.md` for the execution roadmap.
+See `CONFIDENCE.yaml` for artifact-level scoring and machine-readable evidence mapping.
