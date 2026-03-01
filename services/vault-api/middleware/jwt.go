@@ -59,7 +59,8 @@ func JWT(next http.Handler) http.Handler {
 		log.Error().
 			Bool("missing_required_issuer", requiredIssuer == "").
 			Bool("missing_required_audience", len(requiredAudience) == 0).
-			Msg("invalid JWT configuration for strict policy: JWT_REQUIRED_ISSUER and JWT_REQUIRED_AUDIENCE must both be set")
+			Str("auth_policy_mode", policy.Mode).
+			Msgf("invalid JWT configuration for %s policy: JWT_REQUIRED_ISSUER and JWT_REQUIRED_AUDIENCE must both be set", policy.Mode)
 	}
 
 	log.Info().
