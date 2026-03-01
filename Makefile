@@ -62,12 +62,15 @@ proof-pack:
 
 proof-pack-run:
 	@echo "Running full workflow for proof-pack $(DATE)"
+	$(MAKE) compose-up
 	$(MAKE) test
-	$(MAKE) integration-test
+	go test ./tests/integration -v
+	go test ./tests/e2e -v
 	./scripts/drill_restore.sh
 	./scripts/game_day_merkle_down.sh
+	$(MAKE) compose-down
 	$(MAKE) proof-pack DATE="$(DATE)"
-	$(MAKE) pin-ci SHA="$(shell git rev-parse HEAD)" DATE="$(DATE)"
+	$(MAKE) pin-ci SHA="$(SHA)" DATE="$(DATE)"
 
 pin-ci:
 	@echo "Pinning CI run for SHA=$(SHA) DATE=$(DATE)"

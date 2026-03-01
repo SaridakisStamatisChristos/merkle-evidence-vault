@@ -49,7 +49,8 @@ python - <<'PY' "$run_json" "$CI_FILE" "$DATE" "$SHA"
 import json, re, sys
 runs = json.loads(sys.argv[1])
 ci_file, date, sha = sys.argv[2:]
-success = next((r for r in runs if r.get("conclusion") == "success" and re.search(r"/actions/runs/\d+", r.get("url",""))), None)
+successes = [r for r in runs if r.get("conclusion") == "success" and re.search(r"/actions/runs/\d+", r.get("url",""))]
+success = max(successes, key=lambda r: r.get("createdAt","")) if successes else None
 if not success:
     open(ci_file, "w").write(f'''Proof Pack Date: {date}
 Commit SHA: {sha}
