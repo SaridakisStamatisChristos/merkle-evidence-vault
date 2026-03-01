@@ -50,3 +50,29 @@ integration-test: compose-up
 confidence:
 	@echo "Run confidence gate"
 	ci/confidence-gate --config CONFIDENCE.yaml || true
+
+.PHONY: proof-pack proof-pack-run pin-ci
+
+DATE ?= $(shell date -u +%F)
+SHA ?= $(shell git rev-parse HEAD)
+
+proof-pack:
+	@echo "Preparing proof-pack for $(DATE)"
+	./scripts/proof_pack.sh "$(DATE)"
+
+proof-pack-run:
+	@echo "Running full workflow for proof-pack $(DATE)"
+	$(MAKE) compose-up
+	$(MAKE) test
+	go test ./tests/integration -v
+	go test ./tests/e2e -v
+	./scripts/drill_restore.sh
+	./scripts/game_day_merkle_down.sh
+	$(MAKE) compose-down
+	$(MAKE) proof-pack DATE="$(DATE)"
+	$(MAKE) pin-ci SHA="$(SHA)" DATE="$(DATE)"
+
+pin-ci:
+	@echo "Pinning CI run for SHA=$(SHA) DATE=$(DATE)"
+	./scripts/pin_ci.sh "$(SHA)" "$(DATE)"
+	$(MAKE) proof-pack DATE="$(DATE)"
