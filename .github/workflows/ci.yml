@@ -223,8 +223,30 @@ jobs:
         run: |
           set -euo pipefail
           # CI collects scan results for visibility; hard fail is enforced in release-governance.yml.
-          grype local/vault-api:ci -o json > artifacts/security/grype-vault-api.json || true
-          grype local/merkle-engine:ci -o json > artifacts/security/grype-merkle-engine.json || true
+          grype local/vault-api:ci -c .grype.yaml -o json > artifacts/security/grype-vault-api.json || true
+          grype local/merkle-engine:ci -c .grype.yaml -o json > artifacts/security/grype-merkle-engine.json || true
+
+      - name: Print Grype severity summaries (CI report-only)
+        run: |
+          set -euo pipefail
+          summarize() {
+            local file="$1"
+            local label="$2"
+            echo "=== Grype summary: ${label} ==="
+            if [ ! -s "$file" ]; then
+              echo "No scan output found or file is empty: $file"
+              return 0
+            fi
+            critical=$(jq '[.matches[]? | select((.vulnerability.severity // "Unknown") == "Critical")] | length' "$file")
+            high=$(jq '[.matches[]? | select((.vulnerability.severity // "Unknown") == "High")] | length' "$file")
+            medium=$(jq '[.matches[]? | select((.vulnerability.severity // "Unknown") == "Medium")] | length' "$file")
+            low=$(jq '[.matches[]? | select((.vulnerability.severity // "Unknown") == "Low")] | length' "$file")
+            unknown=$(jq '[.matches[]? | select((.vulnerability.severity // "Unknown") == "Unknown" or (.vulnerability.severity == null))] | length' "$file")
+            echo "Critical=${critical} High=${high} Medium=${medium} Low=${low} Unknown=${unknown}"
+          }
+
+          summarize artifacts/security/grype-vault-api.json "local/vault-api:ci"
+          summarize artifacts/security/grype-merkle-engine.json "local/merkle-engine:ci"
 
       - name: Upload security artifacts
         if: always()
