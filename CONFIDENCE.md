@@ -1,43 +1,42 @@
-# CONFIDENCE — Merkle Evidence Vault v0.1.2
+# CONFIDENCE — Merkle Evidence Vault v0.1.3
 
-System effective confidence: **0.86** (pre-production hardening)
+System effective confidence: **0.89** (gated pre-production)
 
 ## Summary
 
-The repository has advanced beyond the prior "test-shim" posture in key areas:
+Confidence increased due to implementation of previously planned controls:
 
-- JWT/JWKS middleware now supports strict policy modes, required claim checks,
-  `kid` enforcement, and RBAC role requirements.
-- Frontend hardening primitives now exist for proof rendering safety, including
-  DOMPurify-based sanitization and a CSP/security header policy module.
-- Fuzzing artifacts, minimized corpus, and replay scripts are present and
-  documented for repeatable adversarial regression checks.
+- **Auth startup fail-fast guardrails are active** with environment-policy checks.
+- **Restore drill automation exists** (scripted backup/restore + replay verification outputs).
+- **Release governance workflows now exist** with SBOM generation, vulnerability scanning,
+  and signing verification gates.
+
+The system remains **not yet production-ready**, but the remaining risk profile is now
+primarily operational-execution quality rather than missing baseline controls.
 
 ## Current production blockers
 
-The system is closer to production, but **not yet production-ready**.
-Remaining blockers are now concentrated in launch governance and operational
-validation rather than missing baseline controls:
+1. **SLO and incident-response evidence gap**
+   - Burn-rate/SLO operations and game-day evidence are not yet complete.
+2. **Sustained restore drill success threshold**
+   - Need repeated strict-mode drill success in CI/production-like environments.
+3. **Durability/failover depth**
+   - More failure-mode validation needed beyond baseline restore path.
+4. **Governance rollout enforcement**
+   - Ensure release governance workflow is required in branch/release protections.
 
-1. **Durability/recovery evidence closure**
-   - Backup/restore and replay verification need an explicit, repeatable launch
-     gate with recorded drill evidence.
-2. **Environment rollout assurance for auth policy**
-   - Strict auth policy behavior must be validated across all non-dev
-     deployments with fail-fast guardrails.
-3. **Release governance evidence**
-   - SBOM/signing/policy-gated release enforcement should be consistently
-     demonstrated in release artifacts.
-4. **SLO and incident-response validation**
-   - One completed game day and burn-rate/SLO evidence package is still needed
-     for final operational readiness claims.
+## What changed since v0.1.2
 
-## Notes on current posture
+- Upgraded from planned controls to implemented controls for:
+  - auth startup guardrails,
+  - restore drill tooling + workflow,
+  - release governance gating primitives.
+- Confidence blocker focus shifted from control implementation to
+  operational consistency and policy enforcement.
 
-- Test depth remains strong across unit, integration, property, and e2e suites.
-- Security risk focus has shifted from previously documented frontend XSS/auth
-  test-shim blockers to durability and launch-process validation.
-- The production execution roadmap is tracked in
-  `PRODUCTION_READINESS_AND_IMPLEMENTATION_PLAN.md`.
+## Readiness interpretation
 
-See `CONFIDENCE.yaml` for artifact-level scoring and required closure items.
+- **Strong:** security baseline, auth posture, release-governance primitives, and test breadth.
+- **Needs closure:** operational SLO/game-day evidence and repeatable durability proof quality.
+
+See `CONFIDENCE.yaml` for artifact-level scoring and `PRODUCTION_READINESS_AND_IMPLEMENTATION_PLAN.md` for the execution roadmap.

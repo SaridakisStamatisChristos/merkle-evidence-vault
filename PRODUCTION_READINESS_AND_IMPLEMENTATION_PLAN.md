@@ -1,89 +1,92 @@
-# Production Readiness Estimate & Implementation Plan (2026-03)
+# Production Readiness Estimate & Implementation Plan (2026-03 Refresh)
 
 ## Executive estimate
 
-**Estimated production readiness: 76 / 100 (late-stage pre-production).**
+**Estimated production readiness: 84 / 100 (pre-production with gated release controls).**
 
-The codebase has strong testing, architecture, security controls, and operational scaffolding, but it is not yet production-ready due to a small number of high-impact closure items in durability, auth policy consistency, release governance, and runbook/SLO validation.
+The repository now includes concrete fail-fast auth startup guardrails, automated restore-drill tooling, and must-pass release governance workflows (SBOM, vulnerability scanning, signing verification). Remaining work is concentrated in operational validation and sustained evidence quality.
 
-## Evidence snapshot
+## Current state (implemented)
 
-### What is strong now
-- **Broad test surface exists** across unit, property, integration, and e2e (`tests/`, middleware tests, signer/metrics tests).
-- **Security controls are materially improved** (JWT/JWKS middleware with strict modes, role checks, claim checks; frontend sanitization + CSP policy modules).
-- **Operational artifacts are present** (Kubernetes manifests, network policy, dashboards, alerts, runbooks, threat model).
-- **Fuzzing process and replay artifacts exist** with corpus + metadata retained.
+### Completed since the previous plan revision
+- **Auth startup guardrails are implemented**
+  - Startup now rejects insecure `AUTH_POLICY=dev` usage outside approved contexts.
+  - Strict modes require required JWT/JWKS environment variables.
+- **Durability drill automation is implemented**
+  - Backup/restore + replay drill scripts exist for shell/PowerShell.
+  - Drill artifacts are written under `artifacts/drills/<timestamp>/`.
+  - Nightly/manual drill workflow uploads artifacts.
+- **Release governance gates are implemented**
+  - CI now generates SBOM/vulnerability reports.
+  - Release workflow now enforces must-pass tests/integration/migrations/fuzz status.
+  - Release workflow enforces SBOM signing and verification.
 
-### Remaining blockers to production claim
-1. **Confidence documents still assert non-production posture**, and currently conflict with improved code paths.
-2. **Checkpoint durability and recovery validation** need explicit launch-gate evidence (repeatable restore + replay verification).
-3. **Auth policy rollout consistency** must be validated across environments (dev/test strictness exceptions, no accidental fallback in prod).
-4. **Release governance hardening** (SBOM/signing/enforcement evidence) needs explicit must-pass gates.
-5. **SLO + incident drill evidence** needs one end-to-end validation cycle with measured MTTR/error budget handling.
+## Remaining blockers to production claim
+1. **Operational proof of reliability (SLO/game-day)**
+   - SLO definitions, burn-rate calibration, and at least one game-day evidence package are still required.
+2. **Drill quality hardening**
+   - Restore drills should be consistently passing under strict mode in CI and in a production-like environment.
+3. **Durability model validation under failure stress**
+   - Add deeper chaos/failover scenarios for checkpoint/replay paths.
+4. **Release governance adoption maturity**
+   - Ensure the new release workflow is set as a required branch/release protection gate.
 
-## 30-60-90 day implementation plan
+## 30-60-90 day execution plan
 
-## Phase 1 (Days 0-30): Launch blockers closure
+## Phase 1 (Days 0-30): Operationalization of newly added controls
 
-### Stream A — Security and auth finalization
-- Freeze an environment matrix for `AUTH_POLICY` and JWT requirements.
-- Add a startup fail-fast check in production profiles when required JWT env vars are missing.
-- Add one integration test pack for malformed tokens, key rotation race behavior, and missing `kid` in strict mode.
-
-**Exit criteria**
-- Production profile cannot start with insecure auth fallback.
-- Auth test matrix passes in CI.
-
-### Stream B — Checkpoint and data durability
-- Verify durable checkpoint persistence paths and retention behavior.
-- Execute backup/restore + replay drill and record evidence artifact.
-- Add a deterministic replay verification command to CI/nightly.
-
-**Exit criteria**
-- Successful restore + replay from backup in a fresh environment.
-
-## Phase 2 (Days 31-60): Operability and reliability proof
-
-### Stream C — SLOs and observability
-- Finalize SLOs for ingest latency, proof latency, checkpoint freshness, and error rate.
-- Wire burn-rate alerts to severity levels and on-call action runbooks.
-- Run one game-day scenario (Merkle engine unavailable + backlog growth).
+### Stream A — Auth rollout confidence
+- Verify environment matrix in each deployment target (`dev`, `staging`, `prod`).
+- Add a deployment checklist proving fail-fast behavior in non-dev environments.
 
 **Exit criteria**
-- Alert-to-mitigation flow validated with acceptable MTTR.
+- No deployment profile can boot with insecure auth policy configuration.
 
-### Stream D — Assurance and adversarial testing
-- Schedule periodic long-run fuzz jobs and automated crash triage outputs.
-- Expand negative-path tests for API authz, pipeline idempotency windows, and checkpoint verification.
-
-**Exit criteria**
-- No unresolved high-severity findings from the extended test/fuzz cycle.
-
-## Phase 3 (Days 61-90): Release readiness and governance
-
-### Stream E — Supply chain and release policy
-- Enforce SBOM generation and signed image/artifact verification in release pipeline.
-- Add release gate requiring: tests, fuzz status, security scan, migration check, and rollback recipe.
-
-### Stream F — Documentation and readiness alignment
-- Update `CONFIDENCE.md` and `CONFIDENCE.yaml` with current implementation reality and measured results.
-- Produce a final production-readiness report mapping each risk to objective evidence.
+### Stream B — Restore drill hardening
+- Run restore drill on schedule with strict mode in at least one stable CI environment.
+- Attach drill summaries and verifier outputs to release-readiness evidence.
 
 **Exit criteria**
-- Release pipeline blocks non-compliant artifacts.
-- Readiness review can trace every control to test/drill evidence.
+- Consecutive successful drill runs with machine-verifiable outputs.
+
+## Phase 2 (Days 31-60): Reliability validation
+
+### Stream C — SLOs and runbooks
+- Finalize ingest/proof/checkpoint SLOs and burn-rate thresholds.
+- Execute one game-day and record MTTR + follow-up actions.
+
+**Exit criteria**
+- On-call flow validated end-to-end from alert to mitigation.
+
+### Stream D — Failure-mode expansion
+- Add failover/restart scenarios for checkpoint replay and proof consistency.
+- Add durability assertions for backup restore in migration-adjacent changes.
+
+**Exit criteria**
+- No unresolved high-severity issues in resilience test matrix.
+
+## Phase 3 (Days 61-90): Launch readiness closure
+
+### Stream E — Governance enforcement finalization
+- Require release-governance workflow in release policy.
+- Confirm signing verification is non-bypassable for release candidates.
+
+### Stream F — Final readiness package
+- Consolidate auth, drill, SLO, security-scan, and signing evidence in a single launch dossier.
+
+**Exit criteria**
+- Formal go/no-go decision can be made from objective evidence without gaps.
 
 ## Priority backlog (ordered)
-1. Production fail-fast auth configuration guardrails.
-2. Restore/replay drill automation and evidence capture.
-3. SLO definitions + burn-rate alerts + game-day execution.
-4. CI/nightly fuzz and adversarial regression expansion.
-5. Signed release + SBOM + policy-gated deploy chain.
-6. Confidence document refresh and final launch checklist.
+1. SLO + burn-rate + game-day evidence package.
+2. Strict-mode restore drill reliability in CI.
+3. Failure-stress durability matrix (replay/failover scenarios).
+4. Branch/release protection alignment with governance workflows.
+5. Final launch dossier with traceable evidence links.
 
 ## Definition of production ready
-- No open critical/high security issues.
-- Deterministic restore + replay validated from backup.
-- SLOs enforced with alerting and demonstrated incident response.
-- Auth/signing configuration cannot silently degrade in production.
-- Release artifacts are signed, traceable, and policy-verified.
+- No open critical/high security vulnerabilities accepted for release.
+- Auth startup policy is fail-fast and validated in production profiles.
+- Restore/replay drill passes consistently with archived evidence.
+- SLOs are measured and incident response is demonstrated.
+- Release artifacts and SBOMs are signed and verification is mandatory.
