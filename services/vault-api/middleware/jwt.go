@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -34,15 +35,98 @@ type resolvedAuthPolicy struct {
 	RequireRoles         bool
 }
 
+type startupAuthConfig struct {
+	Policy             resolvedAuthPolicy
+	PolicyName         string
+	AppEnv             string
+	Deployment         string
+	AllowInsecureDev   bool
+	IsProdStartup      bool
+	JWKSURL            string
+	JWTIssuer          string
+	JWTAudience        []string
+	HasJWKSURL         bool
+	HasJWTIssuer       bool
+	HasJWTAudience     bool
+	HasRequiredJWTVars bool
+}
+
+func loadStartupAuthConfig() startupAuthConfig {
+	appEnv := strings.ToLower(strings.TrimSpace(firstNonEmptyEnv("ENV", "APP_ENV", "ENVIRONMENT", "DEPLOY_ENV")))
+	deployment := strings.ToLower(strings.TrimSpace(os.Getenv("DEPLOYMENT")))
+	allowInsecureDev := parseBoolEnvDefault("ALLOW_INSECURE_DEV", false)
+	policyName := strings.ToLower(strings.TrimSpace(os.Getenv("AUTH_POLICY")))
+	jwksURL := strings.TrimSpace(os.Getenv("JWKS_URL"))
+	jwtIssuer := strings.TrimSpace(firstNonEmptyEnv("JWT_ISSUER", "JWT_REQUIRED_ISSUER"))
+	jwtAudience := parseCSVEnvFirstNonEmpty("JWT_AUDIENCE", "JWT_REQUIRED_AUDIENCE")
+
+	policy := resolveAuthPolicy(appEnv, jwksURL)
+	if policyName == "" {
+		policyName = policy.Mode
+	}
+
+	isProdStartup := appEnv == "prod" || appEnv == "production" || deployment == "prod" || deployment == "production"
+	hasJWKSURL := jwksURL != ""
+	hasJWTIssuer := jwtIssuer != ""
+	hasJWTAudience := len(jwtAudience) > 0
+
+	return startupAuthConfig{
+		Policy:             policy,
+		PolicyName:         policyName,
+		AppEnv:             appEnv,
+		Deployment:         deployment,
+		AllowInsecureDev:   allowInsecureDev,
+		IsProdStartup:      isProdStartup,
+		JWKSURL:            jwksURL,
+		JWTIssuer:          jwtIssuer,
+		JWTAudience:        jwtAudience,
+		HasJWKSURL:         hasJWKSURL,
+		HasJWTIssuer:       hasJWTIssuer,
+		HasJWTAudience:     hasJWTAudience,
+		HasRequiredJWTVars: hasJWKSURL && hasJWTIssuer && hasJWTAudience,
+	}
+}
+
+// ValidateAuthStartupConfig enforces auth profile guardrails before server startup.
+func ValidateAuthStartupConfig() error {
+	cfg := loadStartupAuthConfig()
+
+	log.Info().
+		Str("env", cfg.AppEnv).
+		Str("deployment", cfg.Deployment).
+		Bool("is_prod_startup", cfg.IsProdStartup).
+		Str("resolved_auth_policy", cfg.Policy.Mode).
+		Str("auth_policy_source", cfg.Policy.Source).
+		Bool("allow_insecure_dev", cfg.AllowInsecureDev).
+		Bool("has_jwks_url", cfg.HasJWKSURL).
+		Bool("has_jwt_issuer", cfg.HasJWTIssuer).
+		Bool("has_jwt_audience", cfg.HasJWTAudience).
+		Msg("auth startup configuration resolved")
+
+	if cfg.Policy.Mode == authPolicyDev && !(cfg.AppEnv == "dev" || cfg.AllowInsecureDev) {
+		return fmt.Errorf("AUTH_POLICY=dev is allowed only when ENV=dev or ALLOW_INSECURE_DEV=true")
+	}
+
+	if cfg.IsProdStartup && cfg.Policy.Mode == authPolicyDev {
+		return fmt.Errorf("AUTH_POLICY=dev is not allowed in production startup profiles")
+	}
+
+	if (cfg.Policy.Mode == authPolicyJWKSStrict || cfg.Policy.Mode == authPolicyJWKSRBAC) && !cfg.HasRequiredJWTVars {
+		return fmt.Errorf("%s requires JWKS_URL, JWT_ISSUER, and JWT_AUDIENCE", cfg.Policy.Mode)
+	}
+
+	return nil
+}
+
 // JWT is a middleware that validates a Bearer token.
 func JWT(next http.Handler) http.Handler {
 	var jwks *keyfunc.JWKS
 	jwksURL := strings.TrimSpace(os.Getenv("JWKS_URL"))
-	appEnv := strings.ToLower(strings.TrimSpace(firstNonEmptyEnv("APP_ENV", "ENVIRONMENT", "DEPLOY_ENV")))
+	appEnv := strings.ToLower(strings.TrimSpace(firstNonEmptyEnv("ENV", "APP_ENV", "ENVIRONMENT", "DEPLOY_ENV")))
 	policy := resolveAuthPolicy(appEnv, jwksURL)
 
-	requiredIssuer := strings.TrimSpace(os.Getenv("JWT_REQUIRED_ISSUER"))
-	requiredAudience := parseCSVEnv("JWT_REQUIRED_AUDIENCE")
+	requiredIssuer := strings.TrimSpace(firstNonEmptyEnv("JWT_ISSUER", "JWT_REQUIRED_ISSUER"))
+	requiredAudience := parseCSVEnvFirstNonEmpty("JWT_AUDIENCE", "JWT_REQUIRED_AUDIENCE")
 	allowedAlgs := parseCSVEnvDefault("JWT_ALLOWED_ALGS", []string{"RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EdDSA"})
 	clockSkew := parseIntEnvDefault("JWT_CLOCK_SKEW_SECONDS", 60)
 	jwksMaxAttempts := parseIntEnvDefault("JWT_JWKS_MAX_ATTEMPTS", 12)
@@ -211,6 +295,9 @@ func firstNonEmptyEnv(names ...string) string {
 }
 
 func isTestJWTAllowedEnv(appEnv string) bool {
+	if parseBoolEnvDefault("ALLOW_INSECURE_DEV", false) {
+		return true
+	}
 	switch appEnv {
 	case "", "dev", "development", "local", "test", "ci":
 		return true
@@ -323,6 +410,15 @@ func parseCSVEnv(name string) []string {
 		}
 	}
 	return out
+}
+
+func parseCSVEnvFirstNonEmpty(names ...string) []string {
+	for _, name := range names {
+		if vals := parseCSVEnv(name); len(vals) > 0 {
+			return vals
+		}
+	}
+	return nil
 }
 
 func parseCSVEnvDefault(name string, defaults []string) []string {
