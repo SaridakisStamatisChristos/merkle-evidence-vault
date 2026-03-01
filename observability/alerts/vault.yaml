@@ -1,5 +1,5 @@
 groups:
-  - name: vault.rules
+  - name: vault.availability
     rules:
       - alert: VaultAPIDown
         expr: up{job="vault-api"} == 0
@@ -32,3 +32,108 @@ groups:
           severity: warning
         annotations:
           summary: "checkpoint-svc encountered signing failures"
+
+  - name: vault.slo.recording
+    rules:
+      - record: slo:ingest_latency_p95_seconds
+        expr: histogram_quantile(0.95, sum(rate(vault_api_http_request_duration_seconds_bucket{operation="ingest"}[5m])) by (le))
+
+      - record: slo:proof_latency_p95_seconds
+        expr: histogram_quantile(0.95, sum(rate(vault_api_http_request_duration_seconds_bucket{operation="proof"}[5m])) by (le))
+
+      - record: slo:checkpoint_freshness_seconds
+        expr: time() - checkpoint_svc_last_sign_success_unixtime
+
+      - record: slo:error_rate_5m
+        expr: sum(rate(vault_api_http_requests_operation_total{status_class="5xx"}[5m])) / clamp_min(sum(rate(vault_api_http_requests_operation_total[5m])), 1)
+
+      - record: slo:error_rate_1h
+        expr: sum(rate(vault_api_http_requests_operation_total{status_class="5xx"}[1h])) / clamp_min(sum(rate(vault_api_http_requests_operation_total[1h])), 1)
+
+      - record: slo:error_budget_burn_5m
+        expr: slo:error_rate_5m / 0.01
+
+      - record: slo:error_budget_burn_1h
+        expr: slo:error_rate_1h / 0.01
+
+  - name: vault.slo.alerts
+    rules:
+      - alert: SLOIngestLatencyP95Warning
+        expr: slo:ingest_latency_p95_seconds > 0.35
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ingest p95 latency SLO warning (>350ms for 10m)"
+
+      - alert: SLOIngestLatencyP95Critical
+        expr: slo:ingest_latency_p95_seconds > 0.75
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ingest p95 latency SLO critical (>750ms for 5m)"
+
+      - alert: SLOProofLatencyP95Warning
+        expr: slo:proof_latency_p95_seconds > 0.40
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Proof p95 latency SLO warning (>400ms for 10m)"
+
+      - alert: SLOProofLatencyP95Critical
+        expr: slo:proof_latency_p95_seconds > 0.85
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proof p95 latency SLO critical (>850ms for 5m)"
+
+      - alert: SLOCheckpointFreshnessWarning
+        expr: slo:checkpoint_freshness_seconds > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Checkpoint freshness warning (latest successful sign older than 5m)"
+
+      - alert: SLOCheckpointFreshnessCritical
+        expr: slo:checkpoint_freshness_seconds > 900
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Checkpoint freshness critical (latest successful sign older than 15m)"
+
+      - alert: SLOErrorRateWarning
+        expr: slo:error_rate_5m > 0.01
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error rate warning (>1% 5xx for 10m)"
+
+      - alert: SLOErrorRateCritical
+        expr: slo:error_rate_5m > 0.03
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error rate critical (>3% 5xx for 5m)"
+
+      - alert: SLOErrorBudgetBurnWarning
+        expr: slo:error_budget_burn_1h > 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error budget burn warning (>3x over 1h window)"
+
+      - alert: SLOErrorBudgetBurnCritical
+        expr: slo:error_budget_burn_5m > 14 and slo:error_budget_burn_1h > 6
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error budget burn critical (>14x short window and >6x long window)"

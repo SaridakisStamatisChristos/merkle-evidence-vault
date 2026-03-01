@@ -88,6 +88,7 @@ func main() {
 			enc := base64.StdEncoding.EncodeToString(sig)
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("X-Checkpoint-Key-Ref", signerObj.KeyRef())
+			metrics.RecordSignSuccess()
 			json.NewEncoder(w).Encode(map[string]string{"signature": enc, "key_ref": signerObj.KeyRef()})
 		})
 
