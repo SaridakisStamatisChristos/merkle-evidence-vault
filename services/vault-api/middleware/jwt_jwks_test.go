@@ -355,7 +355,8 @@ func TestJWT_JWKSRequireKid(t *testing.T) {
 	jwksSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if _, writeErr := w.Write(jwksBody); writeErr != nil {
-			t.Fatalf("write jwks response: %v", writeErr)
+			t.Errorf("write jwks response: %v", writeErr)
+			return
 		}
 	}))
 	defer jwksSrv.Close()
