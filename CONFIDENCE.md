@@ -1,31 +1,42 @@
-# CONFIDENCE — Merkle Evidence Vault v0.1.1
+# CONFIDENCE — Merkle Evidence Vault v0.1.3
 
-System effective confidence: 0.82 (development -> hardened test harness)
+System effective confidence: **0.89** (gated pre-production)
 
-Summary:
+## Summary
 
-- Integration and end-to-end test suites (property, integration, e2e) now pass
-	locally using the provided `docker-compose` stack or the local `vault-api` server.
-- Added minimal in-memory implementations in `services/vault-api` to satisfy
-	test flows: ingest, proof, audit listing, and a simple checkpoint endpoint.
+Confidence increased due to implementation of previously planned controls:
 
-Key remaining blockers (prevent production claim):
+- **Auth startup fail-fast guardrails are active** with environment-policy checks.
+- **Restore drill automation exists** (scripted backup/restore + replay verification outputs).
+- **Release governance workflows now exist** with SBOM generation, vulnerability scanning,
+  and signing verification gates.
 
-- I4 HIGH: frontend proof display still renders proof data without a CSP
-	+ DOMPurify sanitization audit and remediation — critical for removal of the
-	HIGH risk (XSS) item.
-- merkle-engine fuzz coverage incomplete — cargo-fuzz targets should be run
-	and results verified (see CONFIDENCE.yaml -> confidence_path_to_production).
-- Authentication & RBAC are currently test-shims (substring checks). Replace
-	with JWKS/JWT validation and role enforcement before production.
+The system remains **not yet production-ready**, but the remaining risk profile is now
+primarily operational-execution quality rather than missing baseline controls.
 
-Notes on what we built:
+## Current production blockers
 
-- Developer ergonomics: `go.work` and local module wiring to ease editor imports.
-- Dev infra: `ops/docker/docker-compose.yml` updated to public images (Kafka
-	+ Zookeeper), merkle-engine Dockerfile updated for reproducible builds.
-- Tests: property + integration + e2e added/updated; e2e exercises ingest →
-	commit → proof → checkpoints → audit flow and passes with example tokens.
+1. **SLO and incident-response evidence gap**
+   - Burn-rate/SLO operations and game-day evidence are not yet complete.
+2. **Sustained restore drill success threshold**
+   - Need repeated strict-mode drill success in CI/production-like environments.
+3. **Durability/failover depth**
+   - More failure-mode validation needed beyond baseline restore path.
+4. **Governance rollout enforcement**
+   - Ensure release governance workflow is required in branch/release protections.
 
-See `CONFIDENCE.yaml` for artifact-level scores and `NEXT_STEPS.md` for
-prioritized remediation and follow-ups.
+## What changed since v0.1.2
+
+- Upgraded from planned controls to implemented controls for:
+  - auth startup guardrails,
+  - restore drill tooling + workflow,
+  - release governance gating primitives.
+- Confidence blocker focus shifted from control implementation to
+  operational consistency and policy enforcement.
+
+## Readiness interpretation
+
+- **Strong:** security baseline, auth posture, release-governance primitives, and test breadth.
+- **Needs closure:** operational SLO/game-day evidence and repeatable durability proof quality.
+
+See `CONFIDENCE.yaml` for artifact-level scoring and `PRODUCTION_READINESS_AND_IMPLEMENTATION_PLAN.md` for the execution roadmap.

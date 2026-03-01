@@ -1,0 +1,18 @@
+# Grype vulnerability governance baseline shared by CI and release gates.
+#
+# Add ignore entries sparingly and only when risk is explicitly accepted.
+# Each ignore entry should include:
+# - vulnerability: CVE or advisory id (required)
+# - package: package name (optional, but recommended when applicable)
+# - reason: why this is temporarily accepted (required)
+# - until: expiry date in YYYY-MM-DD format (required)
+#
+# Example:
+# ignore:
+#   - vulnerability: CVE-2099-0001
+#     package:
+#       name: openssl
+#     reason: "No patched upstream release yet; tracked in SEC-1234"
+#     until: "2026-06-30"
+
+ignore: []
