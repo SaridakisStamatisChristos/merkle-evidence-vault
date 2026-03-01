@@ -1,0 +1,39 @@
+name: drill-restore
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * *'
+
+jobs:
+  drill-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+
+      - name: Run restore drill
+        run: |
+          mkdir -p artifacts/drills
+          DRILL_STRICT=false ./scripts/drill_restore.sh
+
+      - name: Create artifact bundle
+        run: |
+          latest_dir=$(ls -1dt artifacts/drills/* | head -n1)
+          echo "LATEST_DRILL_DIR=$latest_dir" >> "$GITHUB_ENV"
+          zip -r "drill-restore-${GITHUB_RUN_ID}.zip" "$latest_dir"
+
+      - name: Upload drill artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: drill-restore-${{ github.run_id }}
+          path: |
+            ${{ env.LATEST_DRILL_DIR }}
+            drill-restore-${{ github.run_id }}.zip
+          retention-days: 14

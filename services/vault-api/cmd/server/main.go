@@ -13,6 +13,10 @@ import (
 )
 
 func main() {
+	if err := middleware.ValidateAuthStartupConfig(); err != nil {
+		log.Fatal().Err(err).Msg("invalid auth startup configuration")
+	}
+
 	r := chi.NewRouter()
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.Metrics)

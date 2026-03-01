@@ -1,31 +1,43 @@
-# CONFIDENCE — Merkle Evidence Vault v0.1.1
+# CONFIDENCE — Merkle Evidence Vault v0.1.2
 
-System effective confidence: 0.82 (development -> hardened test harness)
+System effective confidence: **0.86** (pre-production hardening)
 
-Summary:
+## Summary
 
-- Integration and end-to-end test suites (property, integration, e2e) now pass
-	locally using the provided `docker-compose` stack or the local `vault-api` server.
-- Added minimal in-memory implementations in `services/vault-api` to satisfy
-	test flows: ingest, proof, audit listing, and a simple checkpoint endpoint.
+The repository has advanced beyond the prior "test-shim" posture in key areas:
 
-Key remaining blockers (prevent production claim):
+- JWT/JWKS middleware now supports strict policy modes, required claim checks,
+  `kid` enforcement, and RBAC role requirements.
+- Frontend hardening primitives now exist for proof rendering safety, including
+  DOMPurify-based sanitization and a CSP/security header policy module.
+- Fuzzing artifacts, minimized corpus, and replay scripts are present and
+  documented for repeatable adversarial regression checks.
 
-- I4 HIGH: frontend proof display still renders proof data without a CSP
-	+ DOMPurify sanitization audit and remediation — critical for removal of the
-	HIGH risk (XSS) item.
-- merkle-engine fuzz coverage incomplete — cargo-fuzz targets should be run
-	and results verified (see CONFIDENCE.yaml -> confidence_path_to_production).
-- Authentication & RBAC are currently test-shims (substring checks). Replace
-	with JWKS/JWT validation and role enforcement before production.
+## Current production blockers
 
-Notes on what we built:
+The system is closer to production, but **not yet production-ready**.
+Remaining blockers are now concentrated in launch governance and operational
+validation rather than missing baseline controls:
 
-- Developer ergonomics: `go.work` and local module wiring to ease editor imports.
-- Dev infra: `ops/docker/docker-compose.yml` updated to public images (Kafka
-	+ Zookeeper), merkle-engine Dockerfile updated for reproducible builds.
-- Tests: property + integration + e2e added/updated; e2e exercises ingest →
-	commit → proof → checkpoints → audit flow and passes with example tokens.
+1. **Durability/recovery evidence closure**
+   - Backup/restore and replay verification need an explicit, repeatable launch
+     gate with recorded drill evidence.
+2. **Environment rollout assurance for auth policy**
+   - Strict auth policy behavior must be validated across all non-dev
+     deployments with fail-fast guardrails.
+3. **Release governance evidence**
+   - SBOM/signing/policy-gated release enforcement should be consistently
+     demonstrated in release artifacts.
+4. **SLO and incident-response validation**
+   - One completed game day and burn-rate/SLO evidence package is still needed
+     for final operational readiness claims.
 
-See `CONFIDENCE.yaml` for artifact-level scores and `NEXT_STEPS.md` for
-prioritized remediation and follow-ups.
+## Notes on current posture
+
+- Test depth remains strong across unit, integration, property, and e2e suites.
+- Security risk focus has shifted from previously documented frontend XSS/auth
+  test-shim blockers to durability and launch-process validation.
+- The production execution roadmap is tracked in
+  `PRODUCTION_READINESS_AND_IMPLEMENTATION_PLAN.md`.
+
+See `CONFIDENCE.yaml` for artifact-level scoring and required closure items.

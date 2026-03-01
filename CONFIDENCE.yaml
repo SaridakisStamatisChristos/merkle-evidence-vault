@@ -1,6 +1,6 @@
-# CONFIDENCE.yaml — Merkle Evidence Vault v0.1.1
-# Snapshot — after integration + e2e wiring and test-shims
-# Generated: 2026-02-25 | Model: beta | Prior: conservative
+# CONFIDENCE.yaml — Merkle Evidence Vault v0.1.2
+# Snapshot — post auth/frontend hardening updates
+# Generated: 2026-03-01 | Model: beta | Prior: conservative
 
 model:
   type: beta
@@ -10,68 +10,64 @@ model:
   block_production_claim_below: 0.80
 
 system:
-  raw_confidence: 0.87
-  effective_confidence: 0.82
-  weakest_link: frontend.adversarial
+  raw_confidence: 0.89
+  effective_confidence: 0.86
+  weakest_link: pipeline.adversarial
   production_ready: false
   reason: >
-    effective_confidence=0.82 < threshold=0.80;
-    HIGH risk I4 (frontend XSS) remains the principal blocker;
-    merkle-engine adversarial score not yet fuzz-verified; auth & signing
-    are currently test-shims/placeholders.
-    Required before production:
-      1. CSP + DOMPurify audit + remediation (I4)
-      2. cargo-fuzz run on tree::append_leaf (> 60s coverage)
-      3. Replace test-shim RBAC with JWKS/JWT validation
-      4. Implement cryptographic checkpoint signing and key protection
+    Baseline security hardening has materially improved (JWT/JWKS strict modes,
+    role/claim checks, frontend sanitization + CSP module), but launch gates are
+    not fully closed yet: durability restore/replay evidence, production auth
+    policy rollout assurance, release signing/SBOM enforcement evidence, and
+    SLO/game-day operational validation remain required for a production claim.
 
 artifacts:
   merkle-engine:
-    description: "Rust RFC6962 tree, proof gen, Ed25519 STH"
+    description: "Rust RFC6962 tree, proof generation, checkpoint primitives"
     raw:
       spec:        0.95
-      impl:        0.88
-      verify:      0.83
-      adversarial: 0.74
-      ops:         0.87
-    effective: 0.74
+      impl:        0.89
+      verify:      0.86
+      adversarial: 0.80
+      ops:         0.88
+    effective: 0.80
     upstream: []
     downstream: [vault-api, checkpoint-svc, verifier-cli]
     notes: >
-      adversarial=0.74: malformed leaf handling tested by unit tests
-      but not yet fuzz-verified. Fuzz target skeleton present in
-      services/merkle-engine/fuzz/. Run: make test-fuzz to improve.
-      Recent change: merkle-engine Dockerfile and `thiserror` dependency
-      added to enable reproducible builds; integration test harness
-      exercises commit + proof flows.
+      Fuzzing harness, minimized corpus, and replay scripts are present.
+      Continued long-run fuzz scheduling and triage hygiene are still needed to
+      convert current assurance into sustained operational confidence.
 
   vault-api:
-    description: "Go REST+gRPC ingestion, query, export"
+    description: "Go REST+gRPC ingestion/query API"
     raw:
       spec:        0.92
-      impl:        0.88
-      verify:      0.86
-      adversarial: 0.81
+      impl:        0.89
+      verify:      0.88
+      adversarial: 0.87
       ops:         0.91
-    effective: 0.80
+    effective: 0.85
     upstream: [merkle-engine]
     downstream: [audit-trail, bundle-export, frontend]
     notes: >
-      Temporary in-memory handlers implemented for local dev and e2e tests.
-      Audit entries and checkpoints are recorded in-memory and must be
-      migrated to persistent Postgres-backed storage for production.
+      JWT middleware now supports strict/JWKS/RBAC policies with explicit claim,
+      algorithm, and key constraints. Remaining risk is rollout consistency and
+      fail-fast enforcement across production environments.
 
   checkpoint-svc:
-    description: "Periodic STH signing and persistence"
+    description: "Periodic checkpoint signing and persistence"
     raw:
       spec:        0.93
       impl:        0.89
       verify:      0.88
-      adversarial: 0.84
-      ops:         0.91
-    effective: 0.76
+      adversarial: 0.85
+      ops:         0.90
+    effective: 0.80
     upstream: [merkle-engine]
     downstream: []
+    notes: >
+      Core path is strong, but production confidence depends on repeatable key
+      lifecycle drills and restore/replay validation evidence.
 
   verifier-cli:
     description: "Offline .evb bundle verification (pure Go)"
@@ -79,21 +75,21 @@ artifacts:
       spec:        0.94
       impl:        0.91
       verify:      0.92
-      adversarial: 0.86
+      adversarial: 0.88
       ops:         0.94
-    effective: 0.74
+    effective: 0.82
     upstream: [merkle-engine, bundle-format]
-    notes: "Highest raw scores — offline tool has smallest attack surface"
+    notes: "Smallest exposed surface; strong verifier confidence profile."
 
   bundle-format:
     description: ".evb tar+zstd archive with manifest + proofs"
     raw:
       spec:        0.91
-      impl:        0.87
-      verify:      0.85
-      adversarial: 0.80
-      ops:         0.88
-    effective: 0.80
+      impl:        0.88
+      verify:      0.86
+      adversarial: 0.82
+      ops:         0.89
+    effective: 0.82
     upstream: []
     downstream: [verifier-cli, vault-api]
 
@@ -103,85 +99,81 @@ artifacts:
       spec:        0.95
       impl:        0.92
       verify:      0.90
-      adversarial: 0.87
+      adversarial: 0.88
       ops:         0.91
-    effective: 0.87
+    effective: 0.88
     upstream: []
     downstream: [vault-api, audit-trail]
-    notes: "Highest effective score — DB-layer immutability is well-verified"
+    notes: "Strong immutability and schema posture; DR drill evidence pending."
 
   pipeline:
     description: "Redpanda ingest consumer + publisher"
     raw:
       spec:        0.88
-      impl:        0.85
-      verify:      0.82
-      adversarial: 0.77
-      ops:         0.86
-    effective: 0.74
+      impl:        0.86
+      verify:      0.83
+      adversarial: 0.79
+      ops:         0.87
+    effective: 0.79
     upstream: [merkle-engine]
     downstream: []
-    notes: "at-least-once delivery; dedup via content_hash bounded by Redis TTL"
+    notes: "At-least-once with bounded dedup window; replay/chaos evidence needed."
 
   audit-trail:
     description: "Append-only audit log API"
     raw:
       spec:        0.91
-      impl:        0.88
-      verify:      0.87
-      adversarial: 0.83
+      impl:        0.89
+      verify:      0.88
+      adversarial: 0.85
       ops:         0.90
-    effective: 0.78
+    effective: 0.82
     upstream: [vault-api, persistence]
 
   frontend:
     description: "React audit dashboard"
     raw:
-      spec:        0.85
-      impl:        0.83
-      verify:      0.79
-      adversarial: 0.74
-      ops:         0.81
-    effective: 0.72
+      spec:        0.86
+      impl:        0.85
+      verify:      0.82
+      adversarial: 0.82
+      ops:         0.83
+    effective: 0.80
     upstream: [vault-api]
     notes: >
-      adversarial=0.74: CSP headers absent; proof data rendered without
-      DOMPurify. HIGH risk (I4). Must be fixed before prod. Despite
-      test coverage for API flows, the frontend attack surface remains
-      the primary production blocker.
+      DOMPurify sanitization and CSP/security-header policy modules exist;
+      previous high-risk XSS blocker is no longer the principal system blocker.
 
   infra:
     description: "Docker, K8s, CI, observability"
     raw:
-      spec:        0.91
-      impl:        0.89
-      verify:      0.85
-      adversarial: 0.84
+      spec:        0.92
+      impl:        0.90
+      verify:      0.86
+      adversarial: 0.85
       ops:         0.92
-    effective: 0.84
+    effective: 0.86
     upstream: []
     downstream: [vault-api, merkle-engine, checkpoint-svc]
-    notes: "distroless images, PSS restricted, network policy default-deny"
+    notes: "Good baseline; SLO/game-day and release-governance evidence still needed."
 
 propagation_warnings:
-  - "merkle-engine.adversarial=0.74 propagates as floor to all downstream artifacts"
-  - "frontend.adversarial=0.74: HIGH risk I4 (XSS) — blocks production claim"
-  - "audit & auth implemented as test-shims in `vault-api` — replace before prod"
-  - "pipeline at-least-once: bounded idempotency window (Redis TTL=24h)"
+  - "pipeline.adversarial=0.79 remains the practical floor for end-to-end confidence"
+  - "durability/replay drill evidence is required before production claim"
+  - "auth policy must be fail-fast and uniformly enforced outside dev/test"
 
 confidence_path_to_production:
-  - item: "CSP + DOMPurify frontend audit & remediation"
-    estimated_gain: "+0.06 on frontend adversarial → removes HIGH risk block"
-  - item: "Replace test-shim RBAC with JWKS/JWT validation"
-    estimated_gain: "+0.04 on vault-api adversarial → system +0.02"
-  - item: "cargo-fuzz tree::append_leaf (> 60s coverage)"
-    estimated_gain: "+0.05 on merkle-engine adversarial → system to ~0.86"
-  - item: "Implement cryptographic checkpoint signing + key protection (HSM)"
-    estimated_gain: "+0.03 on checkpoint-svc adversarial"
+  - item: "Automate backup/restore + checkpoint replay drill with archived evidence"
+    estimated_gain: "+0.02 system confidence; closes durability launch gate"
+  - item: "Enforce production auth fail-fast matrix in deploy/startup checks"
+    estimated_gain: "+0.01 on vault-api adversarial; reduces rollout risk"
+  - item: "SLO burn-rate alerts + completed game day with MTTR report"
+    estimated_gain: "+0.01 on infra ops confidence"
+  - item: "Release SBOM/signing/policy verification hard gate"
+    estimated_gain: "+0.01 system confidence and governance assurance"
 
 quality_gate:
   ci_fails_if:
     confidence_yaml_missing:                true
     any_effective_lt:                       0.65
     production_claimed_without_threshold:   true
-

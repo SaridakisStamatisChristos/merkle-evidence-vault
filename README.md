@@ -17,6 +17,27 @@ make confidence      # Confidence gate (must pass)
 
 See `CONFIDENCE.md` for the confidence assessment and production readiness.
 
+## Authentication configuration (vault-api)
+
+`services/vault-api` enforces startup auth guardrails. Use the table below to configure auth safely.
+
+| Variable | Required | Description |
+|---|---:|---|
+| `AUTH_POLICY` | yes | One of `dev`, `jwks_strict`, `jwks_rbac`. |
+| `ENV` (or `APP_ENV`) | recommended | Environment profile (`dev`, `prod`, etc.). |
+| `DEPLOYMENT` | optional | Deployment profile; `prod` is treated as production startup. |
+| `ALLOW_INSECURE_DEV` | optional | Must be `true` to allow `AUTH_POLICY=dev` outside `ENV=dev`. |
+| `JWKS_URL` | required for `jwks_strict`/`jwks_rbac` | JWKS endpoint URL used for token signature verification. |
+| `JWT_ISSUER` | required for `jwks_strict`/`jwks_rbac` | Required token issuer. |
+| `JWT_AUDIENCE` | required for `jwks_strict`/`jwks_rbac` | Required token audience (comma-separated supported). |
+
+### Fail-fast rules
+
+- `AUTH_POLICY=dev` is allowed only when `ENV=dev` **or** `ALLOW_INSECURE_DEV=true`.
+- When `ENV=prod` or `DEPLOYMENT=prod`, startup rejects `AUTH_POLICY=dev`.
+- `AUTH_POLICY=jwks_strict` and `AUTH_POLICY=jwks_rbac` require `JWKS_URL`, `JWT_ISSUER`, and `JWT_AUDIENCE` at startup.
+
+
 ### Running integration & E2E tests (PowerShell)
 
 When running the repository's integration and end-to-end tests locally on Windows/PowerShell you must export the E2E environment variables in the same shell that runs `make` or `go test`. The test harness expects an API URL and two tokens (ingester and auditor). Example (PowerShell):
@@ -53,4 +74,23 @@ To replay the minimized corpus deterministically:
 ```bash
 ./fuzz/replay_minimized.sh
 ```
+
+## Durability drill (backup/restore + replay verification)
+
+Run the restore drill locally:
+
+```bash
+./scripts/drill_restore.sh
+```
+
+PowerShell:
+
+```powershell
+./scripts/drill_restore.ps1
+```
+
+Artifacts are written to `artifacts/drills/<timestamp>/` and include:
+- `drill_summary.json`
+- logs under `logs/`
+- `verifier_output.json`
 
