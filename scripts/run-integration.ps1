@@ -22,12 +22,22 @@ $env:E2E_API_URL = $ApiUrl
 if (-not $env:E2E_INGESTER_TOKEN) { $env:E2E_INGESTER_TOKEN = $IngesterToken }
 if (-not $env:E2E_AUDITOR_TOKEN)  { $env:E2E_AUDITOR_TOKEN  = $AuditorToken }
 
-# if JWKS_URL wasn't inherited (bash step might not have passed it), load from file
-if (-not $env:JWKS_URL -and (Test-Path "scripts/ci_jwks_env.txt")) {
+# if CI env file exists, hydrate auth-related variables from it.
+# this keeps behavior deterministic even when parent-shell env propagation differs.
+if (Test-Path "scripts/ci_jwks_env.txt") {
     $content = Get-Content "scripts/ci_jwks_env.txt"
     foreach ($line in $content) {
-        if ($line -match '^JWKS_URL=(.*)$') {
-            $env:JWKS_URL = $matches[1]
+        if ($line -match '^([A-Z0-9_]+)=(.*)$') {
+            $k = $matches[1]
+            $v = $matches[2]
+            switch ($k) {
+                'E2E_INGESTER_TOKEN' { $env:E2E_INGESTER_TOKEN = $v }
+                'E2E_AUDITOR_TOKEN' { $env:E2E_AUDITOR_TOKEN = $v }
+                'E2E_NO_ROLES_TOKEN' { $env:E2E_NO_ROLES_TOKEN = $v }
+                'JWKS_URL' { $env:JWKS_URL = $v }
+                'JWT_REQUIRED_ISSUER' { $env:JWT_REQUIRED_ISSUER = $v }
+                'JWT_REQUIRED_AUDIENCE' { $env:JWT_REQUIRED_AUDIENCE = $v }
+            }
         }
     }
 }
@@ -41,12 +51,28 @@ Write-Host "JWKS_URL=$env:JWKS_URL"
 if ($enableBool) {
     Write-Host "Enabling test JWT mode for local runs"
     $env:ENABLE_TEST_JWT = 'true'
+    $env:AUTH_POLICY = 'dev'
 } else {
     Write-Host "Disabling test JWT mode for this run"
     # explicitly set to false so docker-compose substitution works
     $env:ENABLE_TEST_JWT = 'false'
+    $env:AUTH_POLICY = 'jwks_rbac'
 }
-Write-Host "enableBool=$enableBool, Effective ENABLE_TEST_JWT=$env:ENABLE_TEST_JWT"
+Write-Host "enableBool=$enableBool, Effective ENABLE_TEST_JWT=$env:ENABLE_TEST_JWT, AUTH_POLICY=$env:AUTH_POLICY"
+
+if (-not $enableBool) {
+    $missing = @()
+    if (-not $env:E2E_INGESTER_TOKEN) { $missing += 'E2E_INGESTER_TOKEN' }
+    if (-not $env:E2E_AUDITOR_TOKEN) { $missing += 'E2E_AUDITOR_TOKEN' }
+    if (-not $env:JWKS_URL) { $missing += 'JWKS_URL' }
+    if (-not $env:JWT_REQUIRED_ISSUER) { $missing += 'JWT_REQUIRED_ISSUER' }
+    if (-not $env:JWT_REQUIRED_AUDIENCE) { $missing += 'JWT_REQUIRED_AUDIENCE' }
+    if ($missing.Count -gt 0) {
+        Write-Host "ERROR: strict/JWKS run is missing required auth env(s): $($missing -join ', ')" -ForegroundColor Red
+        Write-Host "Tip: ensure scripts/ci_jwks_env.txt is generated and loaded before running integration tests."
+        exit 1
+    }
+}
 
 $composeFile = "ops/docker/docker-compose.yml"
 if (-not (Test-Path $composeFile)) {

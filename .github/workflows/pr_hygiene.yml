@@ -35,6 +35,8 @@ jobs:
 
           has_section() {
             local section="$1"
+            shift || true
+            local aliases=("$@")
             # Prefer markdown heading match, but allow fixed-token fallback for
             # payload formatting oddities from webhook/env interpolation.
             if printf '%s\n' "$NORMALIZED_BODY" | grep -Eiq "^[[:space:]]*#{2,6}[[:space:]]*${section}([[:space:]]*:)?[[:space:]]*$"; then
@@ -43,16 +45,32 @@ jobs:
             if printf '%s\n' "$NORMALIZED_BODY" | grep -Fqi "### ${section}"; then
               return 0
             fi
+            for alias in "${aliases[@]}"; do
+              if printf '%s\n' "$NORMALIZED_BODY" | grep -Eiq "^[[:space:]]*#{2,6}[[:space:]]*${alias}([[:space:]]*:)?[[:space:]]*$"; then
+                echo "Warning: found legacy section heading '${alias}'. Prefer '### ${section}'."
+                return 0
+              fi
+              if printf '%s\n' "$NORMALIZED_BODY" | grep -Fqi "### ${alias}"; then
+                echo "Warning: found legacy section heading '${alias}'. Prefer '### ${section}'."
+                return 0
+              fi
+            done
             return 1
           }
 
           missing=0
-          for section in "summary" "checklist" "test notes"; do
-            if ! has_section "$section"; then
-              echo "Missing required PR template section: ### $section"
-              missing=1
-            fi
-          done
+          if ! has_section "summary" "motivation"; then
+            echo "Missing required PR template section: ### summary"
+            missing=1
+          fi
+          if ! has_section "checklist"; then
+            echo "Missing required PR template section: ### checklist"
+            missing=1
+          fi
+          if ! has_section "test notes" "testing"; then
+            echo "Missing required PR template section: ### test notes"
+            missing=1
+          fi
 
           if [ "$missing" -ne 0 ]; then
             echo "PR body is missing required template sections"

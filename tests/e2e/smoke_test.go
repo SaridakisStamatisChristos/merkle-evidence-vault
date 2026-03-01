@@ -15,6 +15,7 @@ var (
 	apiURL      = envOr("E2E_API_URL", "https://localhost:8443")
 	auditorTok  = envOr("E2E_AUDITOR_TOKEN", "")
 	ingesterTok = envOr("E2E_INGESTER_TOKEN", "")
+	noRolesTok  = envOr("E2E_NO_ROLES_TOKEN", "")
 )
 
 var e2eClient = &http.Client{
@@ -43,8 +44,8 @@ func decode(t *testing.T, resp *http.Response, dst interface{}) {
 	json.NewDecoder(resp.Body).Decode(dst)
 }
 
-// SmokeTest_IngestProveVerify is the golden-path E2E test.
-func TestSmokeIngestProveVerify(t *testing.T) {
+// TestSmokeCoreIngestProveVerify validates ingest/prove/checkpoint core flow.
+func TestSmokeCoreIngestProveVerify(t *testing.T) {
 	if ingesterTok == "" || auditorTok == "" {
 		t.Skip("E2E_INGESTER_TOKEN or E2E_AUDITOR_TOKEN not set")
 	}
@@ -86,7 +87,7 @@ func TestSmokeIngestProveVerify(t *testing.T) {
 	t.Logf("✓ Committed: leaf_index=%d", *leafIndex)
 
 	// Step 3: Inclusion proof.
-	proofResp := e2eReq(t, "GET", "/evidence/"+ingest.ID+"/proof", auditorTok, nil)
+	proofResp := e2eReq(t, "GET", "/evidence/"+ingest.ID+"/proof", ingesterTok, nil)
 	if proofResp.StatusCode != 200 {
 		t.Fatalf("proof: expected 200, got %d", proofResp.StatusCode)
 	}
@@ -104,7 +105,7 @@ func TestSmokeIngestProveVerify(t *testing.T) {
 		proof.LeafIndex, proof.TreeSize, len(proof.Path), proof.Root[:12])
 
 	// Step 4: Latest checkpoint.
-	ckptResp := e2eReq(t, "GET", "/checkpoints/latest", auditorTok, nil)
+	ckptResp := e2eReq(t, "GET", "/checkpoints/latest", ingesterTok, nil)
 	if ckptResp.StatusCode != 200 {
 		t.Logf("⚠ Checkpoint: not yet available (status %d) — ok if no STH emitted yet",
 			ckptResp.StatusCode)
@@ -121,10 +122,23 @@ func TestSmokeIngestProveVerify(t *testing.T) {
 		t.Logf("✓ Checkpoint: tree_size=%d sig=%s…", sth.TreeSize, sth.Signature[:12])
 	}
 
-	// Step 5: Audit log contains our ingest.
-	auditResp := e2eReq(t, "GET", "/audit?limit=20", auditorTok, nil)
-	if auditResp.StatusCode != 200 {
-		t.Fatalf("audit: expected 200, got %d", auditResp.StatusCode)
+	t.Log("✓ Smoke test PASSED")
+}
+
+func TestSmokeAuditRequiresAuditorRole(t *testing.T) {
+	if ingesterTok == "" || auditorTok == "" {
+		t.Skip("E2E_INGESTER_TOKEN or E2E_AUDITOR_TOKEN not set")
+	}
+
+	ingesterResp := e2eReq(t, "GET", "/audit?limit=20", ingesterTok, nil)
+	if ingesterResp.StatusCode != 401 && ingesterResp.StatusCode != 403 {
+		t.Fatalf("audit with ingester token: expected 401/403, got %d", ingesterResp.StatusCode)
+	}
+	ingesterResp.Body.Close()
+
+	auditorResp := e2eReq(t, "GET", "/audit?limit=20", auditorTok, nil)
+	if auditorResp.StatusCode != 200 {
+		t.Fatalf("audit with auditor token: expected 200, got %d", auditorResp.StatusCode)
 	}
 	var auditBody struct {
 		Entries []struct {
@@ -132,10 +146,8 @@ func TestSmokeIngestProveVerify(t *testing.T) {
 			ResourceID string `json:"resource_id"`
 		} `json:"entries"`
 	}
-	decode(t, auditResp, &auditBody)
-	t.Logf("✓ Audit: %d entries returned", len(auditBody.Entries))
-
-	t.Log("✓ Smoke test PASSED")
+	decode(t, auditorResp, &auditBody)
+	t.Logf("✓ Audit (auditor): %d entries returned", len(auditBody.Entries))
 }
 
 func TestSmokeRBACEnforcement(t *testing.T) {
@@ -159,6 +171,25 @@ func TestSmokeRBACEnforcement(t *testing.T) {
 	}
 	unauthResp.Body.Close()
 	t.Log("✓ RBAC: unauthenticated blocked with 401")
+}
+
+func TestSmokeJWKSRBACRejectsTokenWithoutRoles(t *testing.T) {
+	if noRolesTok == "" {
+		t.Skip("E2E_NO_ROLES_TOKEN not set")
+	}
+	policy := envOr("AUTH_POLICY", "")
+
+	resp := e2eReq(t, "GET", "/audit", noRolesTok, nil)
+	if policy == "jwks_rbac" {
+		if resp.StatusCode != 401 {
+			t.Fatalf("expected 401 for no-roles token under jwks_rbac, got %d", resp.StatusCode)
+		}
+	} else {
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			t.Fatalf("expected no-roles token to be denied, got %d (AUTH_POLICY=%q)", resp.StatusCode, policy)
+		}
+	}
+	resp.Body.Close()
 }
 
 func envOr(key, fallback string) string {

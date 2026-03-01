@@ -48,6 +48,7 @@ func main() {
 		claims := jwt.MapClaims{
 			"sub":   sub,
 			"roles": roles,
+			"aud":   []string{"vault-api"},
 			"iat":   now.Unix(),
 			"exp":   now.Add(time.Hour).Unix(),
 			"iss":   "ci-jwks",
@@ -63,6 +64,7 @@ func main() {
 
 	ingester := makeToken("ci-ingester", []string{"ingester"})
 	auditor := makeToken("ci-auditor", []string{"auditor"})
+	noRoles := makeToken("ci-no-roles", nil)
 
 	jwksBytes, _ := json.Marshal(jwks)
 
@@ -108,8 +110,8 @@ func main() {
 
 	// write env file for CI consumption with correct port
 	envFile := []byte(fmt.Sprintf(
-		"E2E_INGESTER_TOKEN=%s\nE2E_AUDITOR_TOKEN=%s\nJWKS_URL=http://localhost:%s/jwks.json\n",
-		ingester, auditor, actualPort))
+		"E2E_INGESTER_TOKEN=%s\nE2E_AUDITOR_TOKEN=%s\nE2E_NO_ROLES_TOKEN=%s\nJWKS_URL=http://localhost:%s/jwks.json\nJWT_REQUIRED_ISSUER=ci-jwks\nJWT_REQUIRED_AUDIENCE=vault-api\n",
+		ingester, auditor, noRoles, actualPort))
 	if err := os.WriteFile("scripts/ci_jwks_env.txt", envFile, 0o600); err != nil {
 		log.Printf("warning: failed to write env file: %v", err)
 	}
@@ -117,7 +119,10 @@ func main() {
 	// print tokens to stdout so CI step can capture
 	fmt.Printf("E2E_INGESTER_TOKEN=%s\n", ingester)
 	fmt.Printf("E2E_AUDITOR_TOKEN=%s\n", auditor)
+	fmt.Printf("E2E_NO_ROLES_TOKEN=%s\n", noRoles)
 	fmt.Printf("JWKS_URL=http://localhost:%s/jwks.json\n", actualPort)
+	fmt.Printf("JWT_REQUIRED_ISSUER=ci-jwks\n")
+	fmt.Printf("JWT_REQUIRED_AUDIENCE=vault-api\n")
 
 	log.Printf("serving jwks on :%s/jwks.json", actualPort)
 	log.Fatal(http.Serve(ln, nil))

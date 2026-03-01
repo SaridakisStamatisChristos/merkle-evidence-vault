@@ -1,8 +1,10 @@
 ### Summary
 
 <!-- Describe what changed and why in release-note style. -->
+<!-- Keep this heading text exactly as `### Summary` (PR hygiene checks are strict). -->
 
 ### Checklist
+<!-- Keep this heading text exactly as `### Checklist`. -->
 - [ ] Code builds and tests pass locally
 - [ ] Relevant integration/e2e tests added or updated
 - [ ] Documentation (README/NEXT_STEPS) updated if needed
@@ -17,4 +19,5 @@
 - `security` - security-sensitive changes
 
 ### Test Notes
+<!-- Keep this heading text exactly as `### Test Notes`. -->
 Provide brief reproduction instructions and list exact commands you ran.
