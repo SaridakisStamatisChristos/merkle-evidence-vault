@@ -1,4 +1,11 @@
 Proof Pack Date: 2026-03-01
 Commit SHA: dda998ae8ebcdb2f9f68efb6d15d64bde9324f8d
-Latest Green CI Run: https://github.com/merkle-evidence-vault/merkle-evidence-vault/actions (run URL to be pinned by release owner)
-Status: pending run URL pinning in this offline packaging step.
+
+Pinned Run URL (required): https://github.com/<org>/<repo>/actions/runs/<run_id>
+Workflow Name: <workflow_name>
+Conclusion: success
+Started At (UTC): <YYYY-MM-DDTHH:MM:SSZ>
+Completed At (UTC): <YYYY-MM-DDTHH:MM:SSZ>
+Run Commit SHA Observed: <head_sha>
+
+Status: template pending pinning (set to: "pinned (run URL + metadata captured)" once filled).

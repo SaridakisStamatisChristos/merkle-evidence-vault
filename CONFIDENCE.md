@@ -4,7 +4,7 @@ System effective confidence: **0.90** (gated pre-production)
 
 ## Summary
 
-Confidence increased due to consolidated production evidence packaging and explicit verification boundaries.
+Confidence increased due to improved auditability and evidence accessibility from consolidated proof-packaging, not due to new executed runtime outcomes.
 
 - **Evidence is now centralized** under a dated proof-pack folder for buyer/evaluator review.
 - **Auth startup fail-fast guardrails are active** with environment-policy checks.
@@ -13,7 +13,7 @@ Confidence increased due to consolidated production evidence packaging and expli
 
 The system remains **not yet production-ready**. The remaining gap is now mostly repeated execution evidence quality, not control design absence.
 
-## Verified Evidence (2026-03-01)
+## Evidence Packaging Status (2026-03-01)
 
 All evidence links below are centralized in: `evidence/proof-pack/2026-03-01/`
 
