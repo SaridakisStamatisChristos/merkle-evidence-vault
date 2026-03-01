@@ -78,6 +78,8 @@ func TestJWT_JWKSConfiguredButUnavailableFailsClosed(t *testing.T) {
 	t.Setenv("JWKS_URL", "http://127.0.0.1:1/unreachable-jwks")
 	t.Setenv("JWT_JWKS_MAX_ATTEMPTS", "1")
 	t.Setenv("JWT_JWKS_RETRY_MS", "0")
+	t.Setenv("JWT_REQUIRED_ISSUER", "test-issuer")
+	t.Setenv("JWT_REQUIRED_AUDIENCE", "test-audience")
 
 	h := JWT(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
