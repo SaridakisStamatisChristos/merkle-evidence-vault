@@ -1,11 +1,11 @@
 Proof Pack Date: 2026-03-01
-Commit SHA: dda998ae8ebcdb2f9f68efb6d15d64bde9324f8d
+Commit SHA: 06edc69ddea9e089c3f48c1fbbde5edc4517ad01
 
-Pinned Run URL (required): https://github.com/<org>/<repo>/actions/runs/<run_id>
-Workflow Name: <workflow_name>
+Pinned Run URL (required): https://github.com/SaridakisStamatisChristos/merkle-evidence-vault/actions/runs/22547752359
+Workflow Name: Artifact Guard
 Conclusion: success
-Started At (UTC): <YYYY-MM-DDTHH:MM:SSZ>
-Completed At (UTC): <YYYY-MM-DDTHH:MM:SSZ>
-Run Commit SHA Observed: <head_sha>
+Started At (UTC): 2026-03-01T16:40:02Z
+Completed At (UTC): 2026-03-01T16:40:09Z
+Run Commit SHA Observed: 06edc69ddea9e089c3f48c1fbbde5edc4517ad01
 
-Status: template pending pinning (set to: "pinned (run URL + metadata captured)" once filled).
+Status: pinned (run URL + metadata captured)

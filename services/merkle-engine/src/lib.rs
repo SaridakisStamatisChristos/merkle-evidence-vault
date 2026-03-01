@@ -27,7 +27,7 @@ mod tests {
     #[test]
     fn property_append_monotonicity() {
         // Build roots for prefixes and ensure they match rebuilt-prefix roots.
-        let items = vec![b"one", b"two", b"three", b"four", b"five"];
+        let items: Vec<&[u8]> = vec![b"one", b"two", b"three", b"four", b"five"];
         let mut prefix_roots = Vec::new();
         for i in 1..=items.len() {
             let mut t = MerkleTree::new();

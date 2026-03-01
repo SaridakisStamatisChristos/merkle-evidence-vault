@@ -33,6 +33,17 @@ get_metric_line() {
   curl -fsS "$API_URL/metrics" | awk -v m="$metric" '$1==m {print $2; exit}'
 }
 
+to_int() {
+  local raw="${1:-0}"
+  raw="${raw%%.*}"
+  raw="${raw//$'\r'/}"
+  raw="${raw//$'\n'/}"
+  if [[ ! "$raw" =~ ^-?[0-9]+$ ]]; then
+    raw=0
+  fi
+  echo "$raw"
+}
+
 api_post_evidence(){
   local payload_b64="$1"
   curl -sS -o /dev/null -w "%{http_code}" -X POST "$API_URL/api/v1/evidence" \
@@ -140,8 +151,12 @@ end_err_metric="$(curl -fsS "$API_URL/metrics" | awk '/vault_api_http_requests_o
 checkpoint_freshness="$(curl -fsS http://localhost:8081/metrics | awk '$1=="checkpoint_svc_last_sign_success_unixtime" {print $2; exit}' || echo 0)"
 
 downtime_seconds=$((merkle_down_end-merkle_down_start))
-requests_delta=$(( ${end_metric_total%.*} - ${start_metric_total%.*} ))
-err_delta=$(( ${end_err_metric%.*} - ${start_err_metric%.*} ))
+start_metric_total_i="$(to_int "$start_metric_total")"
+end_metric_total_i="$(to_int "$end_metric_total")"
+start_err_metric_i="$(to_int "$start_err_metric")"
+end_err_metric_i="$(to_int "$end_err_metric")"
+requests_delta=$(( end_metric_total_i - start_metric_total_i ))
+err_delta=$(( end_err_metric_i - start_err_metric_i ))
 
 pass=true
 reason=""

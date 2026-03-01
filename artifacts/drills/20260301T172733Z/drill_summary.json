@@ -1,0 +1,9 @@
+{
+  "pass": false,
+  "git_sha": "06edc69",
+  "started_epoch": 1772386053,
+  "ended_epoch": 1772386084,
+  "duration_seconds": 31,
+  "verifier_exit_code": 1,
+  "artifact_dir": "artifacts/drills/20260301T172733Z"
+}

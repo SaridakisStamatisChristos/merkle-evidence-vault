@@ -1,0 +1,25 @@
+{
+  "pass": false,
+  "reason": "no proof failures observed during outage;",
+  "scenario": "merkle-engine-down",
+  "git_sha": "06edc69",
+  "started_epoch": 1772386485,
+  "ended_epoch": 1772386707,
+  "duration_seconds": 222,
+  "config": {
+    "load_seconds": 120,
+    "down_seconds": 60
+  },
+  "measurements": {
+    "merkle_downtime_seconds": 62,
+    "proof_success_before": 59,
+    "proof_failures_during_outage": 0,
+    "proof_success_after": 113,
+    "vault_requests_delta": 388,
+    "proof_5xx_delta": 0,
+    "checkpoint_last_success_unixtime": 0
+  },
+  "artifacts": {
+    "log_dir": "artifacts/game-day/20260301T173445Z\\logs"
+  }
+}
