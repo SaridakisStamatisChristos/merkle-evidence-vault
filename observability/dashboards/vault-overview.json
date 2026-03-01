@@ -13,10 +13,54 @@
     },
     {
       "type": "timeseries",
-      "title": "Vault API P95 Latency",
+      "title": "Ingest P95 Latency SLO",
       "targets": [
         {
-          "expr": "vault_api_http_request_duration_seconds_avg"
+          "expr": "slo:ingest_latency_p95_seconds",
+          "legendFormat": "ingest p95"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Proof P95 Latency SLO",
+      "targets": [
+        {
+          "expr": "slo:proof_latency_p95_seconds",
+          "legendFormat": "proof p95"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate SLO (5m)",
+      "targets": [
+        {
+          "expr": "slo:error_rate_5m",
+          "legendFormat": "5xx ratio"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Budget Burn Rate",
+      "targets": [
+        {
+          "expr": "slo:error_budget_burn_5m",
+          "legendFormat": "5m burn"
+        },
+        {
+          "expr": "slo:error_budget_burn_1h",
+          "legendFormat": "1h burn"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Checkpoint Freshness (s)",
+      "targets": [
+        {
+          "expr": "slo:checkpoint_freshness_seconds"
         }
       ]
     },
