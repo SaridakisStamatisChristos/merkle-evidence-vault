@@ -8,6 +8,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- Separated evergreen readiness and evidence documentation from implementation-planning history.
+- Proof-pack presentation now distinguishes captured/executed evidence from passed verification results.
+- Repository automation guidance now preserves failed assurance artifacts rather than treating artifact presence as success.
+
 ### Planned (v0.2)
 - HSM integration for signing key (P1 — ADR-002)
 - mTLS enforcement between vault-api and merkle-engine (P1 — threat S2)

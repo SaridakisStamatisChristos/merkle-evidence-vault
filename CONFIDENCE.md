@@ -1,52 +1,48 @@
 # CONFIDENCE — Merkle Evidence Vault v0.1.4
 
-System effective confidence: **0.90** (gated pre-production)
+System raw confidence: **0.90**  
+System effective confidence: **0.87** (gated pre-production)
 
 ## Summary
 
-Confidence increased due to improved auditability and evidence accessibility from consolidated proof-packaging, not due to new executed runtime outcomes.
+This assessment remains **pre-production**. The confidence model reflects implemented control coverage and evidence accessibility; it does not convert the presence of a proof-pack artifact into a passing runtime result.
 
-- **Evidence is now centralized** under a dated proof-pack folder for buyer/evaluator review.
-- **Auth startup fail-fast guardrails are active** with environment-policy checks.
-- **Restore drill and game-day outputs are represented in the evidence model** with explicit execution-state signaling.
-- **Release governance workflows exist** with SBOM generation, vulnerability scanning, and signing verification gates.
+The latest committed proof pack is dated `2026-03-01`. It centralizes CI, auth, restore-drill, game-day, and supply-chain evidence, but the captured restore and game-day runs both record `pass: false`. Those negative results are intentionally retained.
 
-The system remains **not yet production-ready**. The remaining gap is now mostly repeated execution evidence quality, not control design absence.
+## Evidence packaging status (2026-03-01)
 
-## Evidence Packaging Status (2026-03-01)
+All evidence links below are centralized in `evidence/proof-pack/2026-03-01/`.
 
-All evidence links below are centralized in: `evidence/proof-pack/2026-03-01/`
-
-| Domain | Proven by artifact | Status |
+| Domain | Evidence | Observed state |
 |---|---|---|
-| CI execution traceability | `ci_run.txt` with commit SHA pointer | Verified packaging |
-| Restore drill evidence model | `restore_drill_summary.json` schema + source drill scripts | Verified packaging |
-| Game-day evidence model | `game_day_report.json` schema + source drill scripts | Verified packaging |
-| Supply chain evidence collation | `sbom/` and `signing/` evidence directories | Verified packaging |
-| Auth policy guardrails | `auth_policy_matrix.md` (AUTH_POLICY matrix + prod fail-fast constraints) | Verified packaging |
+| CI traceability | `ci_run.txt` | Pinned successful **Artifact Guard** run for the recorded commit. |
+| Restore drill | `restore_drill_summary.json` and `drills/restore/drill_summary.json` | Executed; captured result is **failed** (`pass: false`). |
+| Game-day drill | `game_day_report.json` and `drills/game-day/game_day_report.json` | Executed; captured result is **failed** (`pass: false`). |
+| Supply chain | `sbom/` and `signing/` | Evidence locations packaged; complete final generated evidence set is not present in this dated pack. |
+| Auth policy | `auth_policy_matrix.md` | Packaged policy matrix and production fail-fast constraints. |
 
-## Assumptions still requiring execution proof
+## Evidence still required for a stronger readiness claim
 
-- Latest CI run URL in `ci_run.txt` must be pinned to a specific successful workflow run.
-- Latest restore drill outputs must be copied from `artifacts/drills/<timestamp>/...` into the proof-pack.
-- Latest game-day execution report must be copied into the proof-pack with MTTR fields populated.
-- SBOM/signing directories must contain the most recent generated artifacts and verification outputs.
+- Successful, repeated strict-mode restore/replay runs with machine-verifiable outputs.
+- A game-day/failure-recovery exercise that satisfies its explicit pass criteria and records actionable recovery evidence.
+- A complete retained SBOM/vulnerability/signing evidence set for the relevant release candidate.
+- Defined and measured SLO/burn-rate thresholds tied to an exercised incident-response path.
+- Verification that repository/release protections actually require the intended governance checks.
 
-## Explicitly out of scope (this update)
+## Explicitly out of scope for this confidence snapshot
 
-- No new runtime control implementation was introduced.
-- No release policy/protection configuration was modified on GitHub.
-- No new operational SLO target or burn-rate threshold definitions were added.
+- No claim that the `2026-03-01` restore or game-day exercise passed.
+- No claim that GitHub branch/release protection settings are configured merely because workflow files exist.
+- No new operational SLO target or burn-rate threshold is inferred from repository structure.
+- No production-ready or production-proven claim is made.
 
 ## Current production blockers
 
-1. **SLO and incident-response evidence gap**
-   - Burn-rate/SLO operations and game-day execution evidence still need refreshed run artifacts.
-2. **Sustained restore drill success threshold**
-   - Need repeated strict-mode drill success in CI/production-like environments.
-3. **Durability/failover depth**
-   - More failure-mode validation needed beyond baseline restore path.
-4. **Governance rollout enforcement**
-   - Ensure release governance workflow is required in branch/release protections.
+1. **Restore/replay success evidence** — the retained dated drill result is a failure and does not establish successful recovery.
+2. **Failure-recovery/game-day success evidence** — the retained dated scenario did not meet its pass criteria.
+3. **SLO and incident-response evidence** — sustained operational objectives and exercised response remain unproven here.
+4. **Durability/failover depth** — broader failure-mode validation is still needed beyond the captured scenarios.
+5. **Supply-chain dossier completeness** — the dated proof pack does not contain the full generated SBOM/signing evidence set.
+6. **Governance rollout enforcement** — required-check/protection configuration must be verified separately from workflow definitions.
 
-See `CONFIDENCE.yaml` for artifact-level scoring and machine-readable evidence mapping.
+See `CONFIDENCE.yaml` for artifact-level scoring and machine-readable evidence mapping, and `READINESS.md` for evergreen readiness gates.

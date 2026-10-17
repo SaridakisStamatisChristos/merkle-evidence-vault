@@ -1,5 +1,104 @@
 # Architecture — Merkle Evidence Vault
 
+## System overview
+
+The diagram below is the primary GitHub-rendered view of the runtime and verification boundaries. It complements the detailed C4 views that follow.
+
+```mermaid
+flowchart LR
+    %% External actors
+    subgraph ACTORS["External actors"]
+        CI["CI/CD pipeline"]
+        CO["Compliance officer"]
+        AU["External auditor"]
+    end
+
+    %% External dependencies
+    subgraph EXT["External dependencies"]
+        OIDC["OIDC / JWKS provider"]
+        OBJ[("Object storage\nS3 / GCS / local")]
+    end
+
+    %% Main product boundary
+    subgraph VAULT["Merkle Evidence Vault"]
+        direction TB
+
+        UI["audit-dashboard\nReact / TypeScript"]
+
+        subgraph ACCESS["Access & policy"]
+            API["vault-api\nGo · REST / gRPC"]
+            REDIS[("Redis\nrate limiting")]
+        end
+
+        subgraph CORE["Evidence & Merkle core"]
+            DB[("PostgreSQL\nappend-only evidence schema")]
+            BUS[("Redpanda\nevent stream")]
+            CONSUMER["pipeline consumer\nidempotent appender"]
+            MERKLE["merkle-engine\nRust · RFC 6962"]
+            CHECKPOINT["checkpoint-svc\nperiodic signed tree heads"]
+        end
+
+        subgraph VERIFY["Portable verification"]
+            BUNDLE[".evb evidence bundle\nmanifest + proofs + checkpoint"]
+            CLI["verifier-cli\nGo · offline / no network"]
+        end
+
+        subgraph OBS["Operations & observability"]
+            PROM["Prometheus"]
+            GRAF["Grafana"]
+        end
+    end
+
+    %% Ingest / query path
+    CI -->|"submit build evidence"| API
+    CO -->|"query / export"| UI
+    UI <-->|"HTTPS"| API
+    OIDC -->|"JWT keys / identity"| API
+    API -->|"rate-limit state"| REDIS
+    API -->|"evidence metadata"| DB
+    API -->|"publish ingest event"| BUS
+    BUS -->|"consume"| CONSUMER
+    CONSUMER -->|"append leaf"| MERKLE
+    API <-->|"proof / tree RPC"| MERKLE
+    MERKLE -->|"tree state"| CHECKPOINT
+    CHECKPOINT -->|"signed checkpoints"| DB
+
+    %% Export / offline verification path
+    API -->|"export"| BUNDLE
+    BUNDLE -->|"archive / retrieve"| OBJ
+    AU -->|"verify independently"| CLI
+    OBJ -.->|"download bundle"| CLI
+    BUNDLE -.->|"local input"| CLI
+
+    %% Observability
+    API -.->|"metrics"| PROM
+    MERKLE -.->|"metrics"| PROM
+    CHECKPOINT -.->|"metrics"| PROM
+    PROM --> GRAF
+
+    classDef actor fill:#f8fafc,stroke:#475569,stroke-width:1.5px,color:#0f172a;
+    classDef access fill:#e0f2fe,stroke:#0284c7,stroke-width:1.5px,color:#0c4a6e;
+    classDef core fill:#ecfdf5,stroke:#059669,stroke-width:1.5px,color:#064e3b;
+    classDef verify fill:#f5f3ff,stroke:#7c3aed,stroke-width:1.5px,color:#4c1d95;
+    classDef external fill:#fff7ed,stroke:#ea580c,stroke-width:1.5px,color:#7c2d12;
+    classDef ops fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#334155;
+
+    class CI,CO,AU actor;
+    class API,REDIS,UI access;
+    class DB,BUS,CONSUMER,MERKLE,CHECKPOINT core;
+    class BUNDLE,CLI verify;
+    class OIDC,OBJ external;
+    class PROM,GRAF ops;
+```
+
+### Architectural intent
+
+- **Append-only evidence path:** ingestion flows through `vault-api`, the event stream, the idempotent consumer, and `merkle-engine`; evidence metadata is retained in PostgreSQL.
+- **Cryptographic checkpointing:** `checkpoint-svc` periodically signs tree state so proofs can be bound to a signed checkpoint.
+- **Portable verification:** exported `.evb` bundles are designed to be checked by `verifier-cli` without network access or trust in the running service.
+- **Separated trust boundaries:** identity comes from the configured OIDC/JWKS provider, object storage is an external availability layer, and offline verification remains out-of-band.
+- **Operational visibility:** Prometheus and Grafana observe the runtime but are not part of the proof trust root.
+
 ## C4 Level 1 — System Context
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
