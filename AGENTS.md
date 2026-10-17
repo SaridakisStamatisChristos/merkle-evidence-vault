@@ -4,7 +4,7 @@ This file documents durable repository automation rules. It is not a build-sessi
 
 ## Standard verification
 
-Use the smallest command that matches the change, then let pull-request CI run the repository-wide lanes.
+Use the smallest command that matches the change, then let pull-request CI run the repository-wide lanes. GitHub Actions must be enabled in repository settings for those CI lanes to start.
 
 ```bash
 make test
