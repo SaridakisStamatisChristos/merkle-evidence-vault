@@ -1,6 +1,6 @@
 # CONFIDENCE.yaml — Merkle Evidence Vault v0.1.4
-# Snapshot — proof-pack consolidation update
-# Generated: 2026-03-01 | Model: beta | Prior: conservative
+# Snapshot: 2026-03-01 proof-pack evidence, reconciled with captured outcomes
+# Model: beta | Prior: conservative
 
 model:
   type: beta
@@ -15,65 +15,73 @@ system:
   weakest_link: pipeline.adversarial
   production_ready: false
   reason: >
-    Control coverage is materially improved and evidence is now consolidated in
-    a dated proof-pack, increasing auditability/reviewability rather than runtime
-    assurance. Production claim remains blocked pending fresh executed drill
-    artifacts (restore/game-day), pinned CI success URL, and fully populated
-    SBOM/signing verification outputs in the proof-pack.
+    Control coverage is materially improved and evidence is consolidated in a
+    dated proof-pack, but the captured restore and game-day results both report
+    pass=false. A production claim remains blocked pending successful repeated
+    recovery evidence, operational SLO/incident-response evidence, complete
+    supply-chain evidence for a release candidate, and verified governance
+    enforcement.
 
 posture:
   assessment_version: v0.1.4
   assessment_date: 2026-03-01
   evidence_pack: evidence/proof-pack/2026-03-01
-  evidence_pack_commit_sha: dda998ae8ebcdb2f9f68efb6d15d64bde9324f8d
+  evidence_pack_commit_sha: 6c9f7efb671815d599662a64b3f09b1dff707831
   change_type: evidence_consolidation
   release_claim: pre_production_only
 
 verified_evidence:
   ci:
     artifact: evidence/proof-pack/2026-03-01/ci_run.txt
-    commit_sha: dda998ae8ebcdb2f9f68efb6d15d64bde9324f8d
-    execution_state: packaged_unpinned_run_url
+    commit_sha: 06edc69ddea9e089c3f48c1fbbde5edc4517ad01
+    workflow_name: Artifact Guard
+    execution_state: pinned_successful_run
   restore_drill:
     artifact: evidence/proof-pack/2026-03-01/restore_drill_summary.json
+    result_artifact: evidence/proof-pack/2026-03-01/drills/restore/drill_summary.json
     source_scripts:
       - scripts/drill_restore.sh
       - scripts/drill_restore.ps1
-    execution_state: packaged_pending_latest_run_copy
+    execution_state: executed_failed
+    observed_pass: false
   game_day:
     artifact: evidence/proof-pack/2026-03-01/game_day_report.json
+    result_artifact: evidence/proof-pack/2026-03-01/drills/game-day/game_day_report.json
     source_scripts:
       - scripts/game_day_merkle_down.sh
       - scripts/game_day_merkle_down.ps1
-    execution_state: packaged_pending_latest_run_copy
+    execution_state: executed_failed
+    observed_pass: false
   supply_chain:
     sbom_dir: evidence/proof-pack/2026-03-01/sbom
     signing_dir: evidence/proof-pack/2026-03-01/signing
-    execution_state: packaged_pending_latest_artifact_copy
+    execution_state: packaged_pending_complete_artifact_set
   auth_policy:
     artifact: evidence/proof-pack/2026-03-01/auth_policy_matrix.md
     execution_state: packaged
 
 assumptions:
-  - "CI run URL will be replaced with latest successful workflow link before external review."
-  - "Restore drill output will be copied from artifacts/drills/<timestamp>/ into proof-pack."
-  - "Game-day report will be copied with MTTR and verification fields populated."
-  - "SBOM and signing outputs will be copied from release-governance CI artifacts."
+  - "A future readiness claim requires successful repeated strict-mode restore/replay evidence."
+  - "A future readiness claim requires a game-day/failure-recovery run that satisfies its explicit pass criteria."
+  - "A release-candidate dossier must retain generated SBOM, vulnerability, signing, and verification outputs."
+  - "Branch/release protection enforcement must be verified independently of workflow-file presence."
+  - "Operational SLO and burn-rate targets require measured execution evidence before they support a readiness claim."
 
 out_of_scope_this_update:
   - "No runtime behavior changes in service code paths."
   - "No GitHub branch protection or workflow-required-check settings changes."
   - "No SLO target definition changes."
+  - "No confidence score increase is inferred from artifact presence alone."
 
 artifacts:
   merkle-engine:
     description: "Rust RFC6962 tree, proof generation, checkpoint primitives"
     raw:
-      spec:        0.95
-      impl:        0.89
-      verify:      0.86
+      spec: 0.95
+      impl: 0.89
+      verify: 0.86
       adversarial: 0.80
-      ops:         0.88
+      ops: 0.88
     effective: 0.80
     upstream: []
     downstream: [vault-api, checkpoint-svc, verifier-cli]
@@ -81,11 +89,11 @@ artifacts:
   vault-api:
     description: "Go REST+gRPC ingestion/query API"
     raw:
-      spec:        0.92
-      impl:        0.89
-      verify:      0.88
+      spec: 0.92
+      impl: 0.89
+      verify: 0.88
       adversarial: 0.87
-      ops:         0.91
+      ops: 0.91
     effective: 0.85
     upstream: [merkle-engine]
     downstream: [audit-trail, bundle-export, frontend]
@@ -93,11 +101,11 @@ artifacts:
   checkpoint-svc:
     description: "Periodic checkpoint signing and persistence"
     raw:
-      spec:        0.93
-      impl:        0.89
-      verify:      0.88
+      spec: 0.93
+      impl: 0.89
+      verify: 0.88
       adversarial: 0.85
-      ops:         0.90
+      ops: 0.90
     effective: 0.80
     upstream: [merkle-engine]
     downstream: []
@@ -105,22 +113,22 @@ artifacts:
   verifier-cli:
     description: "Offline .evb bundle verification (pure Go)"
     raw:
-      spec:        0.94
-      impl:        0.91
-      verify:      0.92
+      spec: 0.94
+      impl: 0.91
+      verify: 0.92
       adversarial: 0.88
-      ops:         0.94
+      ops: 0.94
     effective: 0.82
     upstream: [merkle-engine, bundle-format]
 
   bundle-format:
     description: ".evb tar+zstd archive with manifest + proofs"
     raw:
-      spec:        0.91
-      impl:        0.88
-      verify:      0.86
+      spec: 0.91
+      impl: 0.88
+      verify: 0.86
       adversarial: 0.82
-      ops:         0.89
+      ops: 0.89
     effective: 0.82
     upstream: []
     downstream: [verifier-cli, vault-api]
@@ -128,11 +136,11 @@ artifacts:
   persistence:
     description: "Postgres append-only schema, RLS, migrations"
     raw:
-      spec:        0.95
-      impl:        0.92
-      verify:      0.90
+      spec: 0.95
+      impl: 0.92
+      verify: 0.90
       adversarial: 0.88
-      ops:         0.91
+      ops: 0.91
     effective: 0.88
     upstream: []
     downstream: [vault-api, audit-trail]
@@ -140,11 +148,11 @@ artifacts:
   pipeline:
     description: "Redpanda ingest consumer + publisher"
     raw:
-      spec:        0.88
-      impl:        0.86
-      verify:      0.83
+      spec: 0.88
+      impl: 0.86
+      verify: 0.83
       adversarial: 0.79
-      ops:         0.87
+      ops: 0.87
     effective: 0.79
     upstream: [merkle-engine]
     downstream: []
@@ -152,39 +160,39 @@ artifacts:
   audit-trail:
     description: "Append-only audit log API"
     raw:
-      spec:        0.91
-      impl:        0.89
-      verify:      0.88
+      spec: 0.91
+      impl: 0.89
+      verify: 0.88
       adversarial: 0.85
-      ops:         0.90
+      ops: 0.90
     effective: 0.82
     upstream: [vault-api, persistence]
 
   frontend:
     description: "React audit dashboard"
     raw:
-      spec:        0.86
-      impl:        0.85
-      verify:      0.82
+      spec: 0.86
+      impl: 0.85
+      verify: 0.82
       adversarial: 0.82
-      ops:         0.83
+      ops: 0.83
     effective: 0.80
     upstream: [vault-api]
 
   infra:
     description: "Docker, K8s, CI, observability"
     raw:
-      spec:        0.92
-      impl:        0.90
-      verify:      0.86
+      spec: 0.92
+      impl: 0.90
+      verify: 0.86
       adversarial: 0.85
-      ops:         0.92
+      ops: 0.92
     effective: 0.86
     upstream: []
     downstream: [vault-api, merkle-engine, checkpoint-svc]
 
 quality_gate:
   ci_fails_if:
-    confidence_yaml_missing:                true
-    any_effective_lt:                       0.65
-    production_claimed_without_threshold:   true
+    confidence_yaml_missing: true
+    any_effective_lt: 0.65
+    production_claimed_without_threshold: true
